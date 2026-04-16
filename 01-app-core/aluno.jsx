@@ -120,25 +120,46 @@ const scheduleData = {
   ]
 };
 
+const DEFAULT_STUDENT_USER = {
+  name: 'Diogo Medrado',
+  turma: 'Extensivo',
+  xp: 1250,
+  level: 12,
+};
+
+const getHiddenStudentViews = (session) => session?.hiddenStudentViews ?? [];
+
+const sanitizeStudentView = (view, hiddenViews) =>
+  hiddenViews.includes(view) ? 'dashboard' : view;
+
+const buildStudentUser = (session) => ({
+  ...DEFAULT_STUDENT_USER,
+  ...(session?.name ? { name: session.name } : {}),
+});
+
 // ============================================================================
 // 2. CONTEXTO GLOBAL (Substitui a injeção manual do Hexagonal para UI State)
 // ============================================================================
 
 const AppContext = createContext();
 
-const AppProvider = ({ children, initialView = 'dashboard' }) => {
-  const [currentView, setCurrentView] = useState(initialView);
+const AppProvider = ({ children, initialView = 'dashboard', session = null }) => {
+  const hiddenViews = getHiddenStudentViews(session);
+  const hiddenViewsKey = hiddenViews.join('|');
+  const [currentView, setCurrentView] = useState(() => sanitizeStudentView(initialView, hiddenViews));
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [user, setUser] = useState({ name: 'Diogo Medrado', turma: 'Extensivo', xp: 1250, level: 12 });
+  const [user, setUser] = useState(() => buildStudentUser(session));
 
   useEffect(() => {
-    if (initialView) {
-      setCurrentView(initialView);
-    }
-  }, [initialView]);
+    setCurrentView(sanitizeStudentView(initialView, hiddenViews));
+  }, [hiddenViewsKey, initialView]);
+
+  useEffect(() => {
+    setUser(buildStudentUser(session));
+  }, [session?.name]);
 
   const navigate = (view) => {
-    setCurrentView(view);
+    setCurrentView(sanitizeStudentView(view, hiddenViews));
     setSidebarOpen(false); // Fecha sidebar no mobile ao navegar
   };
 
@@ -154,7 +175,7 @@ const AppProvider = ({ children, initialView = 'dashboard' }) => {
   };
 
   return (
-    <AppContext.Provider value={{ currentView, navigate, sidebarOpen, setSidebarOpen, user, addXp }}>
+    <AppContext.Provider value={{ currentView, navigate, sidebarOpen, setSidebarOpen, user, addXp, hiddenViews }}>
       {children}
     </AppContext.Provider>
   );
@@ -764,40 +785,46 @@ const SidebarItem = ({ icon: Icon, label, id, disabled }) => {
   );
 };
 
-const Navigation = () => (
-  <div className="flex-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
-    <div className="space-y-1 pb-6">
-    <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-6">Estudos</p>
-    <SidebarItem id="dashboard" icon={Home} label="Início" />
-    <SidebarItem id="raio-x" icon={Search} label="Raio-X Enem" />
-    <SidebarItem id="diagnostico" icon={Activity} label="Diagnóstico" />
-    
-    <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-8">Organização</p>
-    <SidebarItem id="calendario" icon={Calendar} label="Calendário" />
-    <SidebarItem id="cronograma" icon={Clock} label="Cronograma" />
-    <SidebarItem id="leituras" icon={BookOpen} label="Leituras" />
-    <SidebarItem id="pomodoro" icon={Play} label="Pomodoro" />
-    
-    <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-8">Prática</p>
-    <SidebarItem id="revisoes" icon={RotateCcw} label="Revisões" />
-    <SidebarItem id="simulados" icon={CheckSquare} label="Simulados" />
+const Navigation = () => {
+  const { hiddenViews } = useApp();
 
-    <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-8">Aprovação e IA</p>
-    <SidebarItem id="aprovacao-fuvest" icon={Target} label="Aprovação FUVEST" />
-    <SidebarItem id="discursiva-ia" icon={FileText} label="Discursiva IA" />
-    <SidebarItem id="redacao-ia-fuvest" icon={PenTool} label="Redação IA" />
-    <SidebarItem id="simulador-tri" icon={Sparkles} label="Simulador TRI" />
+  return (
+    <div className="flex-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
+      <div className="space-y-1 pb-6">
+      <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-6">Estudos</p>
+      <SidebarItem id="dashboard" icon={Home} label="Início" />
+      <SidebarItem id="raio-x" icon={Search} label="Raio-X Enem" />
+      <SidebarItem id="diagnostico" icon={Activity} label="Diagnóstico" />
+      
+      <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-8">Organização</p>
+      <SidebarItem id="calendario" icon={Calendar} label="Calendário" />
+      <SidebarItem id="cronograma" icon={Clock} label="Cronograma" />
+      <SidebarItem id="leituras" icon={BookOpen} label="Leituras" />
+      <SidebarItem id="pomodoro" icon={Play} label="Pomodoro" />
+      
+      <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-8">Prática</p>
+      <SidebarItem id="revisoes" icon={RotateCcw} label="Revisões" />
+      <SidebarItem id="simulados" icon={CheckSquare} label="Simulados" />
 
-    <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-8">Apoio</p>
-    <SidebarItem id="tutoria" icon={Users} label="Tutoria" />
-    <SidebarItem id="humor" icon={Heart} label="Medidor de Humor" />
-    <SidebarItem id="rede-de-apoio" icon={HeartHandshake} label="Rede de Apoio" />
+      <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-8">Aprovação e IA</p>
+      <SidebarItem id="aprovacao-fuvest" icon={Target} label="Aprovação FUVEST" />
+      {!hiddenViews.includes('discursiva-ia') && (
+        <SidebarItem id="discursiva-ia" icon={FileText} label="Discursiva IA" />
+      )}
+      <SidebarItem id="redacao-ia-fuvest" icon={PenTool} label="Redação IA" />
+      <SidebarItem id="simulador-tri" icon={Sparkles} label="Simulador TRI" />
+
+      <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-8">Apoio</p>
+      <SidebarItem id="tutoria" icon={Users} label="Tutoria" />
+      <SidebarItem id="humor" icon={Heart} label="Medidor de Humor" />
+      <SidebarItem id="rede-de-apoio" icon={HeartHandshake} label="Rede de Apoio" />
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const Layout = ({ onLogout }) => {
-  const { currentView, navigate, sidebarOpen, setSidebarOpen, user, addXp } = useApp();
+  const { currentView, navigate, sidebarOpen, setSidebarOpen, user, addXp, hiddenViews } = useApp();
   const isImmersiveView = IMMERSIVE_VIEWS.has(currentView);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const profileDropdownRef = useRef(null);
@@ -927,7 +954,7 @@ const Layout = ({ onLogout }) => {
             {currentView === 'simulados' && <MockExamTrackerView />}
             {currentView === 'pomodoro' && <PomodoroFocusView addXp={addXp} />}
             {currentView === 'aprovacao-fuvest' && <StrategicStudyHub />}
-            {currentView === 'discursiva-ia' && <SecondPhaseDiscursive />}
+            {currentView === 'discursiva-ia' && !hiddenViews.includes('discursiva-ia') && <SecondPhaseDiscursive />}
             {currentView === 'redacao-ia-fuvest' && <FuvestEssayLab />}
             {currentView === 'simulador-tri' && <ScoreSimulator />}
             {currentView === 'tutoria' && <MentorshipHub />}
@@ -980,9 +1007,9 @@ const Layout = ({ onLogout }) => {
 // 6. COMPONENTE RAIZ
 // ============================================================================
 
-export default function App({ initialView = 'dashboard', onLogout }) {
+export default function App({ initialView = 'dashboard', onLogout, session = null }) {
   return (
-    <AppProvider initialView={initialView}>
+    <AppProvider initialView={initialView} session={session}>
       <Layout onLogout={onLogout} />
     </AppProvider>
   );

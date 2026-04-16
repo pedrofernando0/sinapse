@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getDemoDisplayName } from '../src/lib/demoSession.js';
 import { 
   ArrowLeft, 
   User, 
@@ -81,6 +82,10 @@ export default function App({ onLogin }) {
     { icon: FileQuestion, title: 'Criador de Questões', desc: 'Geração inteligente de conteúdo para otimizar seu tempo.' },
     { icon: LayoutList, title: 'Gestão Completa', desc: 'Listas de exercício, simulados e planos de aula unificados.' }
   ];
+  const displayName = getDemoDisplayName(formData);
+  const welcomeTitle = displayName
+    ? `Bem-vinda de volta, ${profile === 'professor' ? 'Prof. ' : ''}${displayName}!`
+    : 'Bem-vindo de volta!';
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 sm:p-8 font-sans overflow-hidden relative">
@@ -290,7 +295,7 @@ export default function App({ onLogin }) {
                     Acesso {profile}
                   </div>
                   <h2 className="text-3xl font-bold text-white mb-2">
-                    Bem-vindo de volta!
+                    {welcomeTitle}
                   </h2>
                   <p className="text-slate-400">Insira suas credenciais para continuar.</p>
                 </div>

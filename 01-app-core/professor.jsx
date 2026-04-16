@@ -11,7 +11,7 @@ import { LessonPlannerView } from './prof-planejador-de-aulas.jsx';
 // 1. DADOS MOCKADOS
 // ============================================================================
 
-const teacherProfile = {
+const DEFAULT_TEACHER_PROFILE = {
   email: 'plfonseca@usp.br',
   name: 'Pedro Fonseca',
   subject: 'História',
@@ -98,10 +98,18 @@ const classSimulados = [
 
 const TeacherContext = createContext();
 
-const TeacherProvider = ({ children, initialView = 'overview' }) => {
+const TeacherProvider = ({ children, initialView = 'overview', session = null }) => {
   const [currentView, setCurrentView] = useState(initialView);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState(mockStudents[0].id);
+  const teacherProfile = useMemo(
+    () => ({
+      ...DEFAULT_TEACHER_PROFILE,
+      ...(session?.name ? { name: session.name } : {}),
+      ...(session?.username ? { email: `${session.username}@sinapse.local` } : {}),
+    }),
+    [session?.name, session?.username]
+  );
 
   useEffect(() => {
     if (initialView) {
@@ -694,7 +702,7 @@ const SidebarItem = ({ icon: Icon, label, id }) => {
 };
 
 const Header = ({ onLogout }) => {
-  const { currentView, setSidebarOpen, classSummary } = useTeacher();
+  const { currentView, setSidebarOpen, classSummary, teacherProfile } = useTeacher();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const dropdownRef = useRef(null);
@@ -887,9 +895,9 @@ const Layout = ({ onLogout }) => {
 // 6. COMPONENTE RAIZ
 // ============================================================================
 
-export default function TeacherApp({ initialView = 'overview', onLogout }) {
+export default function TeacherApp({ initialView = 'overview', onLogout, session = null }) {
   return (
-    <TeacherProvider initialView={initialView}>
+    <TeacherProvider initialView={initialView} session={session}>
       <Layout onLogout={onLogout} />
     </TeacherProvider>
   );
