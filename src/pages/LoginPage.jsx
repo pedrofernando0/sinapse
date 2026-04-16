@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom';
-import LoginScreen from '../../01-app-core/login.jsx';
+import LoginScreen from '../../01-app-core/nova-tela-login.jsx';
 import { buildDemoSession, persistDemoSession } from '../lib/demoSession.js';
+import { getLaunchDestination } from '../lib/launchExperience.js';
+import { preloadShellPage } from '../lib/pageLoaders.js';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -8,13 +10,8 @@ export default function LoginPage() {
   const handleLogin = ({ profile, formData }) => {
     const session = buildDemoSession({ profile, formData });
     persistDemoSession(session);
-
-    if (profile === 'professor') {
-      navigate('/professor');
-      return;
-    }
-
-    navigate('/aluno');
+    preloadShellPage(profile);
+    navigate(getLaunchDestination(profile));
   };
 
   return <LoginScreen onLogin={handleLogin} />;

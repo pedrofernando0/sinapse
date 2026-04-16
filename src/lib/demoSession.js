@@ -2,16 +2,57 @@ export const DEMO_SESSION_STORAGE_KEY = 'sinapse.demo-session';
 
 export const normalizeCredential = (value = '') => value.trim().toLowerCase();
 
-const isValentinaCredentials = ({ username = '', password = '' }) =>
-  normalizeCredential(username) === 'valentina' &&
-  normalizeCredential(password) === 'valentina';
+const DEMO_ACCOUNTS = {
+  valentina: {
+    username: 'valentina',
+    password: 'valentina',
+    name: 'Valentina',
+    hiddenStudentViews: ['discursiva-ia'],
+  },
+  pedro: {
+    username: 'pedro',
+    password: 'pedro',
+    hiddenStudentViews: [],
+  },
+};
+
+const formatDisplayName = (value = '') =>
+  value
+    .trim()
+    .split(/[\s._-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+
+const getDemoAccountByCredentials = ({ username = '', password = '' } = {}) => {
+  const normalizedUsername = normalizeCredential(username);
+  const normalizedPassword = normalizeCredential(password);
+
+  return (
+    Object.values(DEMO_ACCOUNTS).find(
+      (account) =>
+        account.username === normalizedUsername &&
+        account.password === normalizedPassword
+    ) ?? null
+  );
+};
 
 export function getDemoDisplayName({ name = '', username = '' } = {}) {
-  if (name) {
-    return name;
+  if (name?.trim()) {
+    return formatDisplayName(name);
   }
 
-  return normalizeCredential(username) === 'valentina' ? 'Valentina' : null;
+  const normalizedUsername = normalizeCredential(username);
+  if (!normalizedUsername) {
+    return null;
+  }
+
+  const knownAccount = DEMO_ACCOUNTS[normalizedUsername];
+  if (knownAccount?.name) {
+    return knownAccount.name;
+  }
+
+  return formatDisplayName(normalizedUsername.split('@')[0]);
 }
 
 export function normalizeDemoSession(session) {
@@ -41,14 +82,15 @@ export function buildDemoSession({ profile, formData }) {
     hiddenStudentViews: [],
   };
 
-  if (!isValentinaCredentials(formData)) {
+  const knownAccount = getDemoAccountByCredentials(formData);
+  if (!knownAccount) {
     return normalizeDemoSession(baseSession);
   }
 
   return normalizeDemoSession({
     ...baseSession,
-    name: 'Valentina',
-    hiddenStudentViews: profile === 'aluno' ? ['discursiva-ia'] : [],
+    ...(knownAccount.name ? { name: knownAccount.name } : {}),
+    hiddenStudentViews: profile === 'aluno' ? knownAccount.hiddenStudentViews : [],
   });
 }
 

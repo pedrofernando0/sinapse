@@ -6,6 +6,7 @@ import {
   Target, BarChart2, FileText, PenTool, Heart, HeartHandshake,
   Users, Sparkles, Settings, HelpCircle, LogOut
 } from 'lucide-react';
+import { AccountHelpModal, AccountSettingsModal } from '../src/components/ProfileActionPanels.jsx';
 
 const CalendarManagerView = lazy(() =>
   import('./calendario.jsx').then((module) => ({ default: module.CalendarManagerView }))
@@ -29,6 +30,7 @@ const StrategicStudyHub = lazy(() => import('./aprovacao-fuvest.jsx'));
 const SecondPhaseDiscursive = lazy(() => import('./discursiva-ia.jsx'));
 const FuvestEssayLab = lazy(() => import('./redacao-ia-fuvest.jsx'));
 const ScoreSimulator = lazy(() => import('./simulador-tri.jsx'));
+const AiTutoringHub = lazy(() => import('./tutoria-ia.jsx'));
 const MentorshipHub = lazy(() => import('./tutoria.jsx'));
 const MoodTracker = lazy(() => import('./medidor-de-humor.jsx'));
 const SupportNetwork = lazy(() => import('./rede-de-apoio.jsx'));
@@ -99,6 +101,36 @@ const simuladosData = [
   { id: 3, name: 'FUVEST 2025 - 1ª Fase', date: '08 Mar 2026', acertos: 51, total: 90, level: 'average', time: '4h 00m' },
 ];
 
+const INITIAL_STUDENT_NOTIFICATIONS = [
+  {
+    id: 1,
+    title: 'Revisão agendada para hoje',
+    text: 'Sua revisão de Biologia sobre Ecologia vence às 19h.',
+    time: 'Agora',
+    type: 'warning',
+    unread: true,
+    icon: Clock3,
+  },
+  {
+    id: 2,
+    title: 'Tutoria com IA liberada',
+    text: 'Seu tutor já pode montar um plano para o próximo simulado.',
+    time: 'Há 1h',
+    type: 'success',
+    unread: true,
+    icon: CheckCircle2,
+  },
+  {
+    id: 3,
+    title: 'Prazo importante',
+    text: 'As inscrições do ENEM entram na janela de atenção nesta semana.',
+    time: 'Ontem',
+    type: 'danger',
+    unread: false,
+    icon: AlertCircle,
+  },
+];
+
 const diagnosticData = [
   { 
     area: 'Matemática e Suas Tecnologias', 
@@ -136,6 +168,13 @@ const buildStudentUser = (session) => ({
   ...DEFAULT_STUDENT_USER,
   ...(session?.name ? { name: session.name } : {}),
 });
+
+const getFirstName = (name = '') => {
+  const [firstName] = name.trim().split(/\s+/);
+  return firstName || DEFAULT_STUDENT_USER.name.split(' ')[0];
+};
+
+const getNameInitial = (name = '') => getFirstName(name).charAt(0).toUpperCase();
 
 // ============================================================================
 // 2. CONTEXTO GLOBAL (Substitui a injeção manual do Hexagonal para UI State)
@@ -197,7 +236,8 @@ const VIEW_TITLES = {
   'discursiva-ia': 'Discursiva IA',
   'redacao-ia-fuvest': 'Redação IA FUVEST',
   'simulador-tri': 'Simulador TRI',
-  tutoria: 'Tutoria',
+  tutoria: 'Tutoria com IA',
+  mentoria: 'Mentoria',
   humor: 'Medidor de Humor',
   'rede-de-apoio': 'Rede de Apoio',
 };
@@ -208,6 +248,7 @@ const IMMERSIVE_VIEWS = new Set([
   'redacao-ia-fuvest',
   'simulador-tri',
   'tutoria',
+  'mentoria',
   'humor',
   'rede-de-apoio',
 ]);
@@ -245,10 +286,7 @@ const DashboardView = () => {
       {/* Banner Principal (Substitui .dashboard-banner) */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-8 text-white shadow-lg">
         <div className="relative z-10 max-w-lg">
-          <span className="inline-block px-3 py-1 mb-4 text-xs font-bold tracking-wider text-blue-200 uppercase bg-blue-500/20 rounded-full backdrop-blur-md border border-blue-400/20">
-            Sprint 20.5
-          </span>
-          <h2 className="text-3xl font-bold mb-2">Bom dia, {user.name.split(' ')[0]}!</h2>
+          <h2 className="text-3xl font-bold mb-2">Bom dia, {getFirstName(user.name)}!</h2>
           <p className="text-blue-100/80 mb-6 line-clamp-2">
             Faltam 206 dias para o ENEM. Seu foco hoje é Matemática Básica e revisão de Biologia.
           </p>
@@ -815,7 +853,8 @@ const Navigation = () => {
       <SidebarItem id="simulador-tri" icon={Sparkles} label="Simulador TRI" />
 
       <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-8">Apoio</p>
-      <SidebarItem id="tutoria" icon={Users} label="Tutoria" />
+      <SidebarItem id="tutoria" icon={Sparkles} label="Tutoria com IA" />
+      <SidebarItem id="mentoria" icon={Users} label="Mentoria" />
       <SidebarItem id="humor" icon={Heart} label="Medidor de Humor" />
       <SidebarItem id="rede-de-apoio" icon={HeartHandshake} label="Rede de Apoio" />
       </div>
@@ -826,11 +865,36 @@ const Navigation = () => {
 const Layout = ({ onLogout }) => {
   const { currentView, navigate, sidebarOpen, setSidebarOpen, user, addXp, hiddenViews } = useApp();
   const isImmersiveView = IMMERSIVE_VIEWS.has(currentView);
+  const [notifications, setNotifications] = useState(INITIAL_STUDENT_NOTIFICATIONS);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const notificationsDropdownRef = useRef(null);
   const profileDropdownRef = useRef(null);
+  const unreadNotificationsCount = notifications.filter((notification) => notification.unread).length;
+
+  const markNotificationAsRead = (notificationId) => {
+    setNotifications((previousNotifications) =>
+      previousNotifications.map((notification) =>
+        notification.id === notificationId ? { ...notification, unread: false } : notification
+      )
+    );
+  };
+
+  const markAllNotificationsAsRead = () => {
+    setNotifications((previousNotifications) =>
+      previousNotifications.map((notification) =>
+        notification.unread ? { ...notification, unread: false } : notification
+      )
+    );
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
+      if (notificationsDropdownRef.current && !notificationsDropdownRef.current.contains(event.target)) {
+        setShowNotifications(false);
+      }
       if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target)) {
         setShowProfileMenu(false);
       }
@@ -892,28 +956,106 @@ const Layout = ({ onLogout }) => {
               <span className="text-xs font-bold text-slate-800">{user.xp} XP</span>
             </div>
 
-            <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-500 relative">
-              <Bell size={20} />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
-            </button>
+            <div className="relative" ref={notificationsDropdownRef}>
+              <button
+                onClick={() => {
+                  setShowNotifications((previousValue) => !previousValue);
+                  setShowProfileMenu(false);
+                }}
+                className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors relative ${
+                  showNotifications ? 'bg-blue-100 text-blue-600' : 'hover:bg-slate-100 text-slate-500'
+                }`}
+              >
+                <Bell size={20} />
+                {unreadNotificationsCount > 0 && (
+                  <span className="absolute top-2 right-2 min-w-2 h-2 px-1 rounded-full bg-red-500 border-2 border-white" />
+                )}
+              </button>
+
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 shadow-xl rounded-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-3">
+                    <div>
+                      <h4 className="font-bold text-slate-800">Notificações</h4>
+                      <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mt-1">
+                        {unreadNotificationsCount > 0 ? `${unreadNotificationsCount} nova(s)` : 'Tudo em dia'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={markAllNotificationsAsRead}
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-700 disabled:text-slate-300"
+                      disabled={unreadNotificationsCount === 0}
+                    >
+                      Marcar como lidas
+                    </button>
+                  </div>
+                  <div className="max-h-[320px] overflow-y-auto divide-y divide-slate-100">
+                    {notifications.map((notification) => (
+                      <button
+                        key={notification.id}
+                        onClick={() => markNotificationAsRead(notification.id)}
+                        className={`w-full p-4 text-left transition-colors flex gap-3 ${
+                          notification.unread ? 'bg-blue-50/40 hover:bg-blue-50' : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <div
+                          className={`p-2 rounded-full h-fit flex-shrink-0 ${
+                            notification.type === 'danger'
+                              ? 'bg-red-50 text-red-500'
+                              : notification.type === 'warning'
+                                ? 'bg-orange-50 text-orange-500'
+                                : 'bg-teal-50 text-teal-500'
+                          }`}
+                        >
+                          <notification.icon size={16} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="font-bold text-sm text-slate-800">{notification.title}</p>
+                            {notification.unread && <span className="mt-1 w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />}
+                          </div>
+                          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{notification.text}</p>
+                          <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase">{notification.time}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
             
             <div className="relative" ref={profileDropdownRef}>
               <button
-                onClick={() => setShowProfileMenu((prev) => !prev)}
+                onClick={() => {
+                  setShowProfileMenu((prev) => !prev);
+                  setShowNotifications(false);
+                }}
                 className="flex items-center gap-3 pl-4 border-l border-slate-200 hover:opacity-80 transition-opacity text-left"
               >
                 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold border-2 border-white shadow-sm">
-                  {user.name.charAt(0)}
+                  {getNameInitial(user.name)}
                 </div>
               </button>
 
               {showProfileMenu && (
                 <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 shadow-xl rounded-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
                   <div className="p-2 flex flex-col">
-                    <button className="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-left">
+                    <button
+                      onClick={() => {
+                        setShowProfileMenu(false);
+                        setShowSettingsModal(true);
+                      }}
+                      className="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-left"
+                    >
                       <Settings size={16} /> Configurações
                     </button>
-                    <button className="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-left">
+                    <button
+                      onClick={() => {
+                        setShowProfileMenu(false);
+                        setShowHelpModal(true);
+                      }}
+                      className="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-left"
+                    >
                       <HelpCircle size={16} /> Ajuda
                     </button>
                     <div className="h-px bg-slate-100 my-1"></div>
@@ -957,7 +1099,8 @@ const Layout = ({ onLogout }) => {
             {currentView === 'discursiva-ia' && !hiddenViews.includes('discursiva-ia') && <SecondPhaseDiscursive />}
             {currentView === 'redacao-ia-fuvest' && <FuvestEssayLab />}
             {currentView === 'simulador-tri' && <ScoreSimulator />}
-            {currentView === 'tutoria' && <MentorshipHub />}
+            {currentView === 'tutoria' && <AiTutoringHub user={user} />}
+            {currentView === 'mentoria' && <MentorshipHub />}
             {currentView === 'humor' && <MoodTracker />}
             {currentView === 'rede-de-apoio' && <SupportNetwork />}
           </Suspense>
@@ -974,6 +1117,19 @@ const Layout = ({ onLogout }) => {
           </button>
         )}
 
+        <AccountSettingsModal
+          open={showSettingsModal}
+          onClose={() => setShowSettingsModal(false)}
+          profile="student"
+          userName={getFirstName(user.name)}
+        />
+        <AccountHelpModal
+          open={showHelpModal}
+          onClose={() => setShowHelpModal(false)}
+          profile="student"
+          userName={getFirstName(user.name)}
+        />
+
       </main>
 
       {/* Bottom Nav Mobile (Aparece apenas em telas pequenas) */}
@@ -983,7 +1139,7 @@ const Layout = ({ onLogout }) => {
             { id: 'dashboard', icon: Home, label: 'Início' },
             { id: 'calendario', icon: Calendar, label: 'Calendário' },
             { id: 'revisoes', icon: RotateCcw, label: 'Revisões' },
-            { id: 'tutoria', icon: Users, label: 'Tutoria' },
+            { id: 'tutoria', icon: Sparkles, label: 'Tutoria IA' },
           ].map((item) => (
             <button
               key={item.id}

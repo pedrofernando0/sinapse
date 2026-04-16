@@ -6,6 +6,7 @@ import {
   AlertTriangle, Trophy, Filter, Settings, HelpCircle, LogOut
 } from 'lucide-react';
 import { LessonPlannerView } from './prof-planejador-de-aulas.jsx';
+import { AccountHelpModal, AccountSettingsModal } from '../src/components/ProfileActionPanels.jsx';
 
 // ============================================================================
 // 1. DADOS MOCKADOS
@@ -80,10 +81,34 @@ const classSummary = {
   revisionsOnTimeRate: '78%',
 };
 
-const mockNotifications = [
-  { id: 1, title: 'Risco de Evasão', text: 'Gabriel Martins e Carlos Eduardo faltaram às últimas 3 aulas.', type: 'danger', time: 'Há 2h', icon: AlertTriangle },
-  { id: 2, title: 'Meta Atingida', text: 'Ana Beatriz atingiu 80% de acertos no último simulado da FUVEST.', type: 'success', time: 'Há 5h', icon: Trophy },
-  { id: 3, title: 'Revisões Atrasadas', text: '3 alunos estão com mais de 5 revisões de História acumuladas.', type: 'warning', time: 'Ontem', icon: Clock },
+const INITIAL_TEACHER_NOTIFICATIONS = [
+  {
+    id: 1,
+    title: 'Risco de Evasão',
+    text: 'Gabriel Martins e Carlos Eduardo faltaram às últimas 3 aulas.',
+    type: 'danger',
+    time: 'Há 2h',
+    unread: true,
+    icon: AlertTriangle,
+  },
+  {
+    id: 2,
+    title: 'Meta Atingida',
+    text: 'Ana Beatriz atingiu 80% de acertos no último simulado da FUVEST.',
+    type: 'success',
+    time: 'Há 5h',
+    unread: true,
+    icon: Trophy,
+  },
+  {
+    id: 3,
+    title: 'Revisões Atrasadas',
+    text: '3 alunos estão com mais de 5 revisões de História acumuladas.',
+    type: 'warning',
+    time: 'Ontem',
+    unread: false,
+    icon: Clock,
+  },
 ];
 
 const classSimulados = [
@@ -703,10 +728,30 @@ const SidebarItem = ({ icon: Icon, label, id }) => {
 
 const Header = ({ onLogout }) => {
   const { currentView, setSidebarOpen, classSummary, teacherProfile } = useTeacher();
+  const [notifications, setNotifications] = useState(INITIAL_TEACHER_NOTIFICATIONS);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
   const dropdownRef = useRef(null);
   const profileDropdownRef = useRef(null);
+  const unreadNotificationsCount = notifications.filter((notification) => notification.unread).length;
+
+  const markNotificationAsRead = (notificationId) => {
+    setNotifications((previousNotifications) =>
+      previousNotifications.map((notification) =>
+        notification.id === notificationId ? { ...notification, unread: false } : notification
+      )
+    );
+  };
+
+  const markAllNotificationsAsRead = () => {
+    setNotifications((previousNotifications) =>
+      previousNotifications.map((notification) =>
+        notification.unread ? { ...notification, unread: false } : notification
+      )
+    );
+  };
 
   // Fecha o dropdown ao clicar fora
   useEffect(() => {
@@ -754,24 +799,46 @@ const Header = ({ onLogout }) => {
         {/* Botão e Popover de Notificações */}
         <div className="relative" ref={dropdownRef}>
           <button 
-            onClick={() => setShowNotifications(!showNotifications)}
+            onClick={() => {
+              setShowNotifications(!showNotifications);
+              setShowProfileMenu(false);
+            }}
             className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors relative
               ${showNotifications ? 'bg-indigo-100 text-indigo-600' : 'hover:bg-slate-100 text-slate-500'}
             `}
           >
             <Bell size={20} />
-            <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border border-white" />
+            {unreadNotificationsCount > 0 && (
+              <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border border-white" />
+            )}
           </button>
 
           {showNotifications && (
             <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 shadow-xl rounded-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
               <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                <h4 className="font-bold text-slate-800">Notificações</h4>
-                <button className="text-xs font-semibold text-indigo-600 hover:text-indigo-700">Marcar como lidas</button>
+                <div>
+                  <h4 className="font-bold text-slate-800">Notificações</h4>
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mt-1">
+                    {unreadNotificationsCount > 0 ? `${unreadNotificationsCount} nova(s)` : 'Tudo em dia'}
+                  </p>
+                </div>
+                <button
+                  onClick={markAllNotificationsAsRead}
+                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 disabled:text-slate-300"
+                  disabled={unreadNotificationsCount === 0}
+                >
+                  Marcar como lidas
+                </button>
               </div>
               <div className="max-h-[300px] overflow-y-auto divide-y divide-slate-100">
-                {mockNotifications.map(notif => (
-                  <div key={notif.id} className="p-4 hover:bg-slate-50 transition-colors cursor-pointer flex gap-3">
+                {notifications.map(notif => (
+                  <button
+                    key={notif.id}
+                    onClick={() => markNotificationAsRead(notif.id)}
+                    className={`w-full p-4 transition-colors cursor-pointer flex gap-3 text-left ${
+                      notif.unread ? 'bg-indigo-50/40 hover:bg-indigo-50' : 'hover:bg-slate-50'
+                    }`}
+                  >
                     <div className={`p-2 rounded-full h-fit flex-shrink-0
                       ${notif.type === 'danger' ? 'bg-red-50 text-red-500' : 
                         notif.type === 'warning' ? 'bg-orange-50 text-orange-500' : 
@@ -779,12 +846,15 @@ const Header = ({ onLogout }) => {
                     `}>
                       <notif.icon size={16} />
                     </div>
-                    <div>
-                      <p className="font-bold text-sm text-slate-800">{notif.title}</p>
+                    <div className="min-w-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="font-bold text-sm text-slate-800">{notif.title}</p>
+                        {notif.unread && <span className="mt-1 w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0" />}
+                      </div>
                       <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{notif.text}</p>
                       <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase">{notif.time}</p>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -794,7 +864,10 @@ const Header = ({ onLogout }) => {
         {/* Menu do Professor (Perfil) */}
         <div className="relative" ref={profileDropdownRef}>
           <button 
-            onClick={() => setShowProfileMenu(!showProfileMenu)}
+            onClick={() => {
+              setShowProfileMenu(!showProfileMenu);
+              setShowNotifications(false);
+            }}
             className="flex items-center gap-3 pl-4 border-l border-slate-200 hover:opacity-80 transition-opacity text-left"
           >
             <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold border border-indigo-200">
@@ -809,10 +882,22 @@ const Header = ({ onLogout }) => {
           {showProfileMenu && (
             <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 shadow-xl rounded-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
               <div className="p-2 flex flex-col">
-                <button className="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors text-left">
+                <button
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    setShowSettingsModal(true);
+                  }}
+                  className="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors text-left"
+                >
                   <Settings size={16} /> Configurações
                 </button>
-                <button className="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors text-left">
+                <button
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    setShowHelpModal(true);
+                  }}
+                  className="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors text-left"
+                >
                   <HelpCircle size={16} /> Ajuda
                 </button>
                 <div className="h-px bg-slate-100 my-1"></div>
@@ -832,6 +917,19 @@ const Header = ({ onLogout }) => {
           )}
         </div>
       </div>
+
+      <AccountSettingsModal
+        open={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        profile="teacher"
+        userName={teacherProfile.name.split(' ')[0]}
+      />
+      <AccountHelpModal
+        open={showHelpModal}
+        onClose={() => setShowHelpModal(false)}
+        profile="teacher"
+        userName={teacherProfile.name.split(' ')[0]}
+      />
     </header>
   );
 };

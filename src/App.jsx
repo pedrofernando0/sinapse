@@ -1,17 +1,19 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import LoginPage from './pages/LoginPage.jsx';
+import {
+  loadStudentShellPage,
+  loadTeacherShellPage,
+} from './lib/pageLoaders.js';
 
-const LoginPage = lazy(() => import('./pages/LoginPage.jsx'));
-const StudentShellPage = lazy(() => import('./pages/StudentShellPage.jsx'));
-const TeacherShellPage = lazy(() => import('./pages/TeacherShellPage.jsx'));
+const StudentShellPage = lazy(loadStudentShellPage);
+const TeacherShellPage = lazy(loadTeacherShellPage);
 
 export default function App() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-center text-sm font-semibold text-slate-300">
-          Carregando Sinapse...
-        </div>
+        <div className="min-h-screen bg-[#050505]" />
       }
     >
       <Routes>
@@ -27,6 +29,8 @@ export default function App() {
         <Route path="/modulos/rede-de-apoio" element={<Navigate to="/aluno?view=rede-de-apoio" replace />} />
         <Route path="/modulos/simulador-tri" element={<Navigate to="/aluno?view=simulador-tri" replace />} />
         <Route path="/modulos/tutoria" element={<Navigate to="/aluno?view=tutoria" replace />} />
+        <Route path="/modulos/tutoria-ia" element={<Navigate to="/aluno?view=tutoria" replace />} />
+        <Route path="/modulos/mentoria" element={<Navigate to="/aluno?view=mentoria" replace />} />
 
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
