@@ -253,6 +253,62 @@ const IMMERSIVE_VIEWS = new Set([
   'rede-de-apoio',
 ]);
 
+const NAVIGATION_SECTIONS = [
+  {
+    id: 'essencial',
+    title: 'Estudos',
+    items: [
+      { id: 'dashboard', icon: Home, label: 'Início' },
+      { id: 'raio-x', icon: Search, label: 'Raio-X Enem' },
+      { id: 'diagnostico', icon: Activity, label: 'Diagnóstico' },
+    ],
+  },
+  {
+    id: 'organizacao',
+    title: 'Organização',
+    items: [
+      { id: 'calendario', icon: Calendar, label: 'Calendário' },
+      { id: 'cronograma', icon: Clock, label: 'Cronograma' },
+      { id: 'leituras', icon: BookOpen, label: 'Leituras' },
+      { id: 'pomodoro', icon: Play, label: 'Pomodoro' },
+    ],
+  },
+  {
+    id: 'pratica',
+    title: 'Prática',
+    items: [
+      { id: 'revisoes', icon: RotateCcw, label: 'Revisões' },
+      { id: 'simulados', icon: CheckSquare, label: 'Simulados' },
+    ],
+  },
+  {
+    id: 'estrategia',
+    title: 'Aprovação',
+    items: [
+      { id: 'aprovacao-fuvest', icon: Target, label: 'Aprovação FUVEST' },
+      { id: 'simulador-tri', icon: Sparkles, label: 'Simulador TRI' },
+    ],
+  },
+  {
+    id: 'ia',
+    title: 'IA',
+    items: [
+      { id: 'discursiva-ia', icon: FileText, label: 'Discursiva IA', hiddenWhen: 'discursiva-ia' },
+      { id: 'redacao-ia-fuvest', icon: PenTool, label: 'Redação IA' },
+      { id: 'tutoria', icon: Sparkles, label: 'Tutoria com IA' },
+    ],
+  },
+  {
+    id: 'apoio',
+    title: 'Apoio',
+    items: [
+      { id: 'mentoria', icon: Users, label: 'Mentoria' },
+      { id: 'humor', icon: Heart, label: 'Medidor de Humor' },
+      { id: 'rede-de-apoio', icon: HeartHandshake, label: 'Rede de Apoio' },
+    ],
+  },
+];
+
 // ============================================================================
 // 3. COMPONENTES UI REUTILIZÁVEIS (Substitui o components.css)
 // ============================================================================
@@ -829,34 +885,30 @@ const Navigation = () => {
   return (
     <div className="flex-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
       <div className="space-y-1 pb-6">
-      <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-6">Estudos</p>
-      <SidebarItem id="dashboard" icon={Home} label="Início" />
-      <SidebarItem id="raio-x" icon={Search} label="Raio-X Enem" />
-      <SidebarItem id="diagnostico" icon={Activity} label="Diagnóstico" />
-      
-      <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-8">Organização</p>
-      <SidebarItem id="calendario" icon={Calendar} label="Calendário" />
-      <SidebarItem id="cronograma" icon={Clock} label="Cronograma" />
-      <SidebarItem id="leituras" icon={BookOpen} label="Leituras" />
-      <SidebarItem id="pomodoro" icon={Play} label="Pomodoro" />
-      
-      <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-8">Prática</p>
-      <SidebarItem id="revisoes" icon={RotateCcw} label="Revisões" />
-      <SidebarItem id="simulados" icon={CheckSquare} label="Simulados" />
+        {NAVIGATION_SECTIONS.map((section) => {
+          const visibleItems = section.items.filter((item) => !item.hiddenWhen || !hiddenViews.includes(item.hiddenWhen));
 
-      <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-8">Aprovação e IA</p>
-      <SidebarItem id="aprovacao-fuvest" icon={Target} label="Aprovação FUVEST" />
-      {!hiddenViews.includes('discursiva-ia') && (
-        <SidebarItem id="discursiva-ia" icon={FileText} label="Discursiva IA" />
-      )}
-      <SidebarItem id="redacao-ia-fuvest" icon={PenTool} label="Redação IA" />
-      <SidebarItem id="simulador-tri" icon={Sparkles} label="Simulador TRI" />
+          if (!visibleItems.length) {
+            return null;
+          }
 
-      <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-8">Apoio</p>
-      <SidebarItem id="tutoria" icon={Sparkles} label="Tutoria com IA" />
-      <SidebarItem id="mentoria" icon={Users} label="Mentoria" />
-      <SidebarItem id="humor" icon={Heart} label="Medidor de Humor" />
-      <SidebarItem id="rede-de-apoio" icon={HeartHandshake} label="Rede de Apoio" />
+          return (
+            <section key={section.id} className="pt-6 first:pt-6">
+              <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                {section.title}
+              </p>
+              {visibleItems.map((item) => (
+                <SidebarItem
+                  key={item.id}
+                  id={item.id}
+                  icon={item.icon}
+                  label={item.label}
+                  disabled={item.disabled}
+                />
+              ))}
+            </section>
+          );
+        })}
       </div>
     </div>
   );
