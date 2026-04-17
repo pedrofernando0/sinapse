@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import LoginScreen from '../../01-app-core/nova-tela-login.jsx';
+import LoginScreen from '../features/auth/Login.jsx';
 import { buildDemoSession, persistDemoSession } from '../lib/demoSession.js';
 import { getLaunchDestination } from '../lib/launchExperience.js';
 import { preloadShellPage } from '../lib/pageLoaders.js';
