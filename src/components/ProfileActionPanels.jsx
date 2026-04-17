@@ -7,12 +7,12 @@ const PROFILE_CONTENT = {
   student: {
     badge: 'Experiencia do Aluno',
     roleLabel: 'Aluno',
-    gradient: 'from-sky-500 via-blue-600 to-indigo-700',
-    softSurface: 'bg-blue-50',
-    softText: 'text-blue-700',
-    softBorder: 'border-blue-200/70',
-    primaryButton: 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500',
-    secondaryButton: 'border-blue-200 text-blue-700 hover:bg-blue-50',
+    gradient: 'from-blue-950 via-blue-900 to-blue-800',
+    softSurface: 'bg-yellow-50',
+    softText: 'text-blue-900',
+    softBorder: 'border-yellow-200',
+    primaryButton: 'bg-blue-900 hover:bg-blue-800 focus:ring-blue-900',
+    secondaryButton: 'border-blue-300 text-blue-900 hover:bg-blue-50',
     settingsStorageKey: 'sinapse.student-settings',
     settingsTitle: 'Configurações do seu ambiente',
     settingsDescription: 'Ajuste o ritmo da plataforma, o tipo de lembrete e a intensidade da experiencia de estudo.',
@@ -155,11 +155,11 @@ const ModalFrame = ({ open, onClose, theme, eyebrow, title, description, icon: I
         onClick={onClose}
       />
 
-      <div className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] border border-white/60 bg-white shadow-[0_32px_120px_rgba(15,23,42,0.24)]">
+      <div className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] border border-white/60 bg-white shadow-[0_32px_120px_rgba(15,23,42,0.24)] max-h-[90vh] flex flex-col">
         <div className={`absolute inset-x-0 top-0 h-40 bg-gradient-to-r ${theme.gradient} opacity-95`} />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_35%)]" />
 
-        <div className="relative p-6 sm:p-8">
+        <div className="relative overflow-y-auto p-6 sm:p-8">
           <div className="mb-8 flex items-start justify-between gap-4">
             <div className="max-w-xl">
               <div className={`mb-4 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-[0.22em] ${theme.softSurface} ${theme.softText} ${theme.softBorder}`}>
