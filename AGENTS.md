@@ -14,11 +14,12 @@ Se alguma resposta for "não sei", leia o arquivo indicado antes de continuar.
 | Pergunta | Onde buscar resposta |
 |----------|---------------------|
 | Qual shell recebe a feature? | `docs/ARCHITECTURE.md` → seção Student/Teacher shell |
-| O módulo já existe em `01-app-core/`? | `ls 01-app-core/` |
+| O arquivo já foi migrado para `src/features/`? | `docs/ARCHITECTURE.md` → Migration naming map |
+| O módulo ainda está em `01-app-core/`? | `ls 01-app-core/` |
 | Algum componente de `src/components/` já resolve o problema? | `src/components/` |
-| O ícone que preciso existe no Lucide? | Consulte `lucide.dev` ou `grep -r "from 'lucide-react'" 01-app-core/` |
+| O ícone que preciso existe no Lucide? | Consulte `lucide.dev` ou `grep -r "from 'lucide-react'" src/` |
 | A mudança quebra algum import existente? | Verifique `import` e `export default` no arquivo alvo |
-| O sprint atual prevê esta mudança? | `docs/SPRINTS.md` |
+| O sprint atual prevê esta mudança? | `docs/SPRINTS.md` → Sprint Arq |
 
 ---
 
@@ -129,8 +130,10 @@ const MeuComponente = ({ propA, propB }) => {
 | Handler | `handle` + evento | `handleMarkAllRead` |
 | Variável booleana | `is/has/show/can` + substantivo | `isImmersiveView` |
 | Constante de dado | SCREAMING_SNAKE_CASE | `INITIAL_STUDENT_NOTIFICATIONS` |
-| Arquivo módulo | kebab-case | `aprovacao-fuvest.jsx` |
-| Arquivo componente | PascalCase | `StudentFeatures.jsx` |
+| Arquivo módulo (legado 01-app-core/) | kebab-case | `aprovacao-fuvest.jsx` |
+| Arquivo componente React | PascalCase | `StudentFeatures.jsx`, `Login.jsx` |
+| Arquivo componente migrado (src/features/) | PascalCase **em inglês** | `FuvestApproval.jsx`, `MoodTracker.jsx` |
+| Diretório de feature | lowercase inglês | `auth`, `student`, `ai-tools` |
 
 ---
 
@@ -198,12 +201,26 @@ do shell já está configurado — não crie Suspense redundante.
 ### Imports cross-layer
 
 ```
-De 01-app-core/ para src/:   '../src/components/...'  '../src/lib/...'
-De src/components/ para src/: '../lib/...'  '../pages/...'
-De src/pages/ para 01-app-core/: '../../01-app-core/...'
+# Arquivos já migrados para src/features/
+from src/features/auth/         →  ../../components/...   ../../lib/...
+from src/features/student/      →  ../../components/...   ../../lib/...
+from src/features/teacher/      →  ../../components/...   ../../lib/...
+from src/features/ai-tools/     →  ../../components/...   ../../lib/...
+from src/features/assessments/  →  ../../components/...   ../../lib/...
+
+# Camadas de integração
+from src/pages/                 →  ../features/...         ../lib/...
+from src/routes/                →  ../pages/...
+from src/components/            →  ../lib/...
+
+# Arquivos ainda em 01-app-core/ (legado)
+from 01-app-core/               →  ../src/components/...  ../src/lib/...
 ```
 
-`01-app-core/` nunca importa de `src/pages/`. `src/lib/` nunca importa de `01-app-core/`.
+Regras absolutas:
+- `01-app-core/` nunca importa de `src/pages/` ou `src/features/`.
+- `src/lib/` nunca importa de `01-app-core/` ou `src/features/`.
+- `src/features/*` nunca importa diretamente de outro feature slice.
 
 ---
 
@@ -382,7 +399,7 @@ Nunca force-push em `main`. Nunca commite `node_modules/`, `.env` ou arquivos de
 
 Um agente deve pausar e solicitar confirmação humana quando:
 
-- A mudança afeta o fluxo de autenticação / routing em `src/App.jsx`.
+- A mudança afeta o fluxo de autenticação / routing em `src/routes/AppRoutes.jsx`.
 - A mudança remove ou renomeia uma rota existente.
 - A mudança afeta mais de **4 arquivos** não relacionados entre si.
 - O agente identificou um bug que requer remoção de funcionalidade existente.
