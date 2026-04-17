@@ -24,44 +24,48 @@ npm run preview    # preview do build de produção
 
 ```
 sinapse/
-├── 01-app-core/              # shells de produto e módulos de features
-│   ├── aluno.jsx             # SHELL DO ALUNO — container principal (~1160 linhas)
-│   ├── professor.jsx         # SHELL DO PROFESSOR — container principal (~1000 linhas)
-│   ├── nova-tela-login.jsx   # tela de login (integrada via LoginPage)
-│   ├── aprovacao-fuvest.jsx  # módulo: estratégia FUVEST
-│   ├── calendario.jsx        # módulo: calendário (usa date-fns)
-│   ├── cronograma.jsx        # módulo: grade semanal editável
-│   ├── discursiva-ia.jsx     # módulo: redação discursiva com IA
-│   ├── leituras.jsx          # módulo: obras obrigatórias FUVEST
-│   ├── medidor-de-humor.jsx  # módulo: tracker emocional
-│   ├── pomodoro.jsx          # módulo: timer Pomodoro
-│   ├── prof-planejador-de-aulas.jsx  # módulo: planejador docente
-│   ├── redacao-ia-fuvest.jsx # módulo: feedback de redação FUVEST
-│   ├── rede-de-apoio.jsx     # módulo: rede de suporte
-│   ├── revisoes.jsx          # módulo: revisões espaçadas
-│   ├── simulador-tri.jsx     # módulo: simulador de nota TRI
-│   ├── simulados.jsx         # módulo: tracker de simulados
-│   ├── tutoria-ia.jsx        # módulo: tutoria com IA (chat)
-│   └── tutoria.jsx           # módulo: mentoria com ex-alunos
+├── 01-app-core/              # LEGADO — sendo drenado para src/features/ (Sprint Arq)
+│   ├── aluno.jsx             # → features/student/StudentShell.jsx (pendente SA-1.5)
+│   ├── professor.jsx         # → features/teacher/TeacherShell.jsx (pendente SA-2.2)
+│   ├── aprovacao-fuvest.jsx  # → features/assessments/FuvestApproval.jsx
+│   ├── calendario.jsx        # → features/student/Calendar.jsx
+│   ├── cronograma.jsx        # → features/student/Schedule.jsx
+│   ├── discursiva-ia.jsx     # → features/ai-tools/DiscursiveAI.jsx
+│   ├── leituras.jsx          # → features/student/Readings.jsx
+│   ├── medidor-de-humor.jsx  # → features/student/MoodTracker.jsx
+│   ├── pomodoro.jsx          # → features/student/Pomodoro.jsx
+│   ├── prof-planejador-de-aulas.jsx  # → features/teacher/LessonPlanner.jsx
+│   ├── redacao-ia-fuvest.jsx # → features/ai-tools/EssayReview.jsx
+│   ├── rede-de-apoio.jsx     # → features/student/SupportNetwork.jsx
+│   ├── revisoes.jsx          # → features/student/Revisions.jsx
+│   ├── simulador-tri.jsx     # → features/assessments/TriSimulator.jsx
+│   ├── simulados.jsx         # → features/assessments/Simulados.jsx
+│   ├── tutoria-ia.jsx        # → features/ai-tools/Tutoria.jsx
+│   └── tutoria.jsx           # → features/student/Mentorship.jsx
 │
 ├── src/
-│   ├── App.jsx               # roteador React Router
-│   ├── main.jsx              # bootstrap React DOM
+│   ├── App.jsx               # provider host — renderiza <AppRoutes /> apenas
+│   ├── main.jsx              # createRoot + BrowserRouter
 │   ├── index.css             # fontes (Fraunces + Manrope) + base dark
-│   ├── components/
-│   │   ├── ProfileActionPanels.jsx  # modais de configurações e ajuda
-│   │   └── StudentFeatures.jsx      # RaioXSection + MentoriaView
+│   ├── components/           # componentes presentacionais compartilhados (named exports)
+│   │   ├── ProfileActionPanels.jsx
+│   │   └── StudentFeatures.jsx
+│   ├── features/             # domínios de produto (Feature-Sliced Design)
+│   │   └── auth/
+│   │       └── Login.jsx     # ✅ migrado de nova-tela-login.jsx
 │   ├── lib/
-│   │   ├── demoSession.js    # gerência de sessão demo (localStorage)
-│   │   ├── launchExperience.js  # config da tela de boas-vindas por perfil
-│   │   └── pageLoaders.js    # preload dos shells
-│   └── pages/
-│       ├── LoginPage.jsx     # wrapper: lida com autenticação demo
-│       ├── StudentShellPage.jsx  # wrapper: lê sessão + query params
-│       └── TeacherShellPage.jsx  # wrapper: lê sessão + query params
+│   │   ├── demoSession.js
+│   │   ├── launchExperience.js
+│   │   └── pageLoaders.js
+│   ├── pages/                # entry points de rotas — orquestram features + libs
+│   │   ├── LoginPage.jsx
+│   │   ├── StudentShellPage.jsx
+│   │   └── TeacherShellPage.jsx
+│   └── routes/
+│       └── AppRoutes.jsx     # ✅ toda a configuração declarativa de rotas
 │
 ├── docs/
-│   ├── ARCHITECTURE.md       # design do sistema, diagrama de fluxo
+│   ├── ARCHITECTURE.md       # design do sistema + mapa de migração
 │   ├── SPRINTS.md            # kanban e backlog de sprints
 │   └── STACK.md              # referência por biblioteca
 │
@@ -71,32 +75,38 @@ sinapse/
 └── README.md                 # visão geral pública do projeto
 ```
 
+> **Não crie arquivos novos em `01-app-core/`.** Novos módulos vão em `src/features/{domínio}/`.
+
 ---
 
-## Arquitetura em duas camadas
+## Arquitetura (estado atual — Sprint Arq em progresso)
 
 ```
-src/          →  integração: roteamento, sessão, wrappers de página
-01-app-core/  →  produto: shells, views inline, módulos lazy-loaded
+src/routes/   →  configuração declarativa de rotas (AppRoutes.jsx)
+src/features/ →  domínios de produto (Feature-Sliced Design) — crescendo
+src/pages/    →  entry points de rotas: orquestram features + libs
+src/components/ → componentes presentacionais compartilhados
+src/lib/      →  sessão, experiência de lançamento, preload
+01-app-core/  →  LEGADO: shells + módulos aguardando migração para src/features/
 ```
 
-`src/` não contém lógica de produto. `01-app-core/` não conhece o roteador.
-A comunicação é feita via props (`initialView`, `session`, `onLogout`) que os
-wrappers em `src/pages/` injetam nos shells.
+`src/features/*` não importa de `src/pages/` nem de outros feature slices.
+`01-app-core/` não importa de `src/pages/` nem de `src/features/`.
 
 ---
 
 ## Fluxo de runtime
 
 ```
-src/main.jsx
-  └── BrowserRouter + App.jsx (routes)
-        ├── /login   → LoginPage → nova-tela-login.jsx
-        │                └── handleLogin() → buildDemoSession() → navigate(/aluno)
-        ├── /aluno   → StudentShellPage
-        │                └── aluno.jsx (AppProvider + Layout)
-        └── /professor → TeacherShellPage
-                         └── professor.jsx (TeacherProvider + TeacherLayout)
+src/main.jsx  (createRoot + BrowserRouter)
+  └── App.jsx  (provider host)
+        └── routes/AppRoutes.jsx
+              ├── /  /login   → LoginPage → features/auth/Login.jsx
+              │                  └── handleLogin() → buildDemoSession() → navigate(/aluno)
+              ├── /aluno/*    → StudentShellPage
+              │                  └── 01-app-core/aluno.jsx  (pendente SA-1.5)
+              └── /professor/* → TeacherShellPage
+                                  └── 01-app-core/professor.jsx  (pendente SA-2.2)
 ```
 
 Navegação interna aos shells **não usa React Router**: usa `AppContext.navigate(view)`
@@ -193,16 +203,24 @@ todos os módulos recebem padding padrão.
 // Ícones — SEMPRE de lucide-react, verifique o nome em lucide.dev
 import { Home, Bell, Star, CheckCircle2 } from 'lucide-react';
 
-// Componentes compartilhados
-import { AccountSettingsModal, AccountHelpModal } from '../src/components/ProfileActionPanels.jsx';
-import { RaioXSection, MentoriaView } from '../src/components/StudentFeatures.jsx';
+// Componentes compartilhados — de qualquer camada:
+import { AccountSettingsModal, AccountHelpModal } from '../src/components/ProfileActionPanels.jsx'; // de 01-app-core/
+import { AccountSettingsModal, AccountHelpModal } from '../../components/ProfileActionPanels.jsx';  // de src/features/*/
 
-// Sessão (use só em src/pages/)
-import { getStoredDemoSession, clearDemoSession } from '../src/lib/demoSession.js';
+import { RaioXSection, MentoriaView } from '../src/components/StudentFeatures.jsx'; // de 01-app-core/
+import { RaioXSection, MentoriaView } from '../../components/StudentFeatures.jsx';  // de src/features/*/
+
+// Sessão (use só em src/pages/ ou src/features/)
+import { getStoredDemoSession, clearDemoSession } from '../src/lib/demoSession.js'; // de 01-app-core/
+import { getStoredDemoSession, clearDemoSession } from '../../lib/demoSession.js';  // de src/features/*/
 ```
 
-Caminhos relativos a partir de `01-app-core/`: `../src/...`
-Caminhos relativos a partir de `src/components/`: `../lib/...`, `../../01-app-core/...`
+| Importando de | Caminho para src/components/ | Caminho para src/lib/ |
+|---------------|-----------------------------|-----------------------|
+| `01-app-core/` | `../src/components/...` | `../src/lib/...` |
+| `src/features/auth/` | `../../components/...` | `../../lib/...` |
+| `src/features/student/` | `../../components/...` | `../../lib/...` |
+| `src/pages/` | `../components/...` | `../lib/...` |
 
 ---
 

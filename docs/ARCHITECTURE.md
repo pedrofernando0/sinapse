@@ -1,192 +1,265 @@
 # Architecture — Sinapse
 
-Documento de referência do design do sistema. Mantido junto com o código —
-atualize este arquivo sempre que mudar a estrutura de shells, rotas ou contextos.
+Reference document for system design. Update whenever changing shell structure, routes, contexts, or the feature migration map. The source of truth for LLM agents on what lives where.
 
 ---
 
-## Visão geral
+## Migration State (Sprint Arq — in progress)
 
-Sinapse tem **uma entrada de autenticação** e **dois shells de produto** separados
-por perfil. Toda a lógica de produto vive em `01-app-core/`. A camada `src/`
-conecta o produto ao roteador e ao sistema de sessão.
+The codebase is mid-migration from `01-app-core/` (legacy monolith) to `src/features/` (Feature-Sliced Design). Both directories coexist. **Do not add new files to `01-app-core/`** — new code goes to `src/features/`.
+
+| Step | Artefact | Status |
+|------|----------|--------|
+| SA-1.1 | `src/routes/AppRoutes.jsx` | ✅ Done |
+| SA-1.1 | `src/App.jsx` → provider host only | ✅ Done |
+| SA-1.2 | `src/main.jsx` → React 18 named imports | ✅ Done |
+| SA-1.3 | `src/features/auth/Login.jsx` (from `nova-tela-login.jsx`) | ✅ Done |
+| SA-1.4 | `StudentShellPage` + `TeacherShellPage` → `<Outlet />` | ⬜ Next |
+| SA-1.5 | `01-app-core/aluno.jsx` → `src/features/student/StudentShell.jsx` | ⬜ |
+| SA-2.1 | Zustand: `src/store/sessionSlice.js` + `uiSlice.js` | ⬜ |
+| SA-2.2 | `01-app-core/professor.jsx` → `src/features/teacher/TeacherShell.jsx` | ⬜ |
+| SA-2.3 | AI modules → `src/features/ai-tools/` | ⬜ |
+| SA-2.4 | Assessment modules → `src/features/assessments/` | ⬜ |
+| SA-2.5 | Student modules → `src/features/student/` | ⬜ |
+| SA-2.6 | Teacher modules → `src/features/teacher/` | ⬜ |
+| SA-3.1 | `src/services/` layer setup | ⬜ |
+| SA-3.2 | `src/store/` Zustand wiring | ⬜ |
+
+---
+
+## Target Directory Tree
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                        src/                         │
-│  App.jsx (router)  ←  main.jsx (bootstrap)          │
-│       │                                             │
-│  ┌────┴────┐    ┌─────────────┐   ┌──────────────┐ │
-│  │LoginPage│    │StudentShell │   │TeacherShell  │ │
-│  │         │    │   Page.jsx  │   │   Page.jsx   │ │
-│  └────┬────┘    └──────┬──────┘   └──────┬───────┘ │
-└───────┼────────────────┼─────────────────┼─────────┘
-        │                │                 │
-┌───────┼────────────────┼─────────────────┼─────────┐
-│       │         01-app-core/             │         │
-│       ▼                ▼                 ▼         │
-│  nova-tela-     aluno.jsx          professor.jsx   │
-│  login.jsx      (AppProvider       (TeacherProvider│
-│                 + Layout)          + TeacherLayout) │
-│                      │                  │          │
-│              lazy-loaded modules  lazy-loaded      │
-│              (calendario, raio-x, (planejador-     │
-│               revisoes, etc.)      de-aulas, etc.) │
-└─────────────────────────────────────────────────────┘
+src/
+  assets/
+  components/           # Shared presentational-only (named exports)
+  features/
+    auth/               # Login.jsx ✅
+    student/            # StudentShell.jsx + student-domain modules
+    teacher/            # TeacherShell.jsx + teacher-domain modules
+    ai-tools/           # Tutoria.jsx, EssayReview.jsx, DiscursiveAI.jsx
+    assessments/        # Simulados.jsx, TriSimulator.jsx, FuvestApproval.jsx
+  layouts/              # Shell layout skeletons (post SA-1.4)
+  pages/                # Route entry points — thin orchestrators only
+  routes/
+    AppRoutes.jsx       # All <Routes> declarations ✅
+  store/                # Zustand slices
+  services/             # External API clients (OpenAI, Firebase, etc.)
+  lib/                  # demoSession.js, launchExperience.js, pageLoaders.js
+  utils/                # Pure functions, no side-effects
+  App.jsx               # Provider host ✅
+  main.jsx              # createRoot + BrowserRouter ✅
+```
+
+Files still in `01-app-core/` are awaiting migration. See naming map below.
+
+---
+
+## Naming Conventions (enforced during migration)
+
+| Type | Convention | Example |
+|------|-----------|---------|
+| Feature directory | lowercase English | `auth`, `student`, `ai-tools` |
+| React component file | `PascalCase.jsx` | `Login.jsx`, `StudentShell.jsx` |
+| Non-component module | `camelCase.js` | `sessionSlice.js` |
+| Route config | `PascalCase.jsx` | `AppRoutes.jsx` |
+| Shared component | `PascalCase.jsx` + named export | `StudentFeatures.jsx` |
+| Hook | `use` + PascalCase | `useSession.js` |
+
+### Migration naming map (01-app-core/ → src/features/)
+
+| Legacy | Target | Status |
+|--------|--------|--------|
+| `nova-tela-login.jsx` | `features/auth/Login.jsx` | ✅ Deleted |
+| `aluno.jsx` | `features/student/StudentShell.jsx` | ⬜ SA-1.5 |
+| `professor.jsx` | `features/teacher/TeacherShell.jsx` | ⬜ SA-2.2 |
+| `tutoria-ia.jsx` | `features/ai-tools/Tutoria.jsx` | ⬜ SA-2.3 |
+| `discursiva-ia.jsx` | `features/ai-tools/DiscursiveAI.jsx` | ⬜ SA-2.3 |
+| `redacao-ia-fuvest.jsx` | `features/ai-tools/EssayReview.jsx` | ⬜ SA-2.3 |
+| `simulados.jsx` | `features/assessments/Simulados.jsx` | ⬜ SA-2.4 |
+| `simulador-tri.jsx` | `features/assessments/TriSimulator.jsx` | ⬜ SA-2.4 |
+| `aprovacao-fuvest.jsx` | `features/assessments/FuvestApproval.jsx` | ⬜ SA-2.4 |
+| `calendario.jsx` | `features/student/Calendar.jsx` | ⬜ SA-2.5 |
+| `cronograma.jsx` | `features/student/Schedule.jsx` | ⬜ SA-2.5 |
+| `revisoes.jsx` | `features/student/Revisions.jsx` | ⬜ SA-2.5 |
+| `leituras.jsx` | `features/student/Readings.jsx` | ⬜ SA-2.5 |
+| `pomodoro.jsx` | `features/student/Pomodoro.jsx` | ⬜ SA-2.5 |
+| `medidor-de-humor.jsx` | `features/student/MoodTracker.jsx` | ⬜ SA-2.5 |
+| `rede-de-apoio.jsx` | `features/student/SupportNetwork.jsx` | ⬜ SA-2.5 |
+| `tutoria.jsx` | `features/student/Mentorship.jsx` | ⬜ SA-2.5 |
+| `prof-planejador-de-aulas.jsx` | `features/teacher/LessonPlanner.jsx` | ⬜ SA-2.6 |
+
+**Rule:** after migrating a file, delete the original from `01-app-core/`.
+
+---
+
+## Current Runtime Flow
+
+```
+main.jsx  (BrowserRouter)
+  └── App.jsx  (provider host — future: Zustand <Provider> wraps here)
+        └── routes/AppRoutes.jsx
+              ├── /  /login     → pages/LoginPage → features/auth/Login.jsx
+              ├── /aluno/*      → pages/StudentShellPage → 01-app-core/aluno.jsx  ← pending SA-1.5
+              └── /professor/*  → pages/TeacherShellPage → 01-app-core/professor.jsx  ← pending SA-2.2
+```
+
+Internal shell navigation does NOT use React Router — uses `AppContext.navigate(viewId)` → updates `currentView` → `?view=` synced by wrapper page.
+
+---
+
+## Layer: src/routes/
+
+| File | Responsibility |
+|------|----------------|
+| `AppRoutes.jsx` | All `<Routes>` declarations. Lazy-imports shell pages. Handles `/modulos/*` legacy redirects. |
+
+```jsx
+// Pattern: lazy page + wildcard route
+const StudentShellPage = lazy(() => import('../pages/StudentShellPage.jsx'));
+<Route path="/aluno/*" element={<StudentShellPage />} />
 ```
 
 ---
 
-## Camada `src/` — Integração
+## Layer: src/features/ (partial — migration in progress)
 
-Responsabilidades exclusivas da camada de integração:
+### auth/
 
-| Arquivo | Responsabilidade |
-|---------|-----------------|
-| `main.jsx` | Bootstrap React DOM + BrowserRouter |
-| `App.jsx` | Mapa de rotas + redirects legacy |
-| `pages/LoginPage.jsx` | Recebe credenciais, cria sessão, navega para shell |
-| `pages/StudentShellPage.jsx` | Lê sessão, lê `?view=`, injeta props no shell do aluno |
-| `pages/TeacherShellPage.jsx` | Lê sessão, lê `?view=`, injeta props no shell do professor |
-| `lib/demoSession.js` | CRUD de sessão no `localStorage` |
-| `lib/launchExperience.js` | Config da tela de boas-vindas por perfil |
-| `lib/pageLoaders.js` | Preload dos shells antes da navegação |
-| `components/ProfileActionPanels.jsx` | Modais de configurações e ajuda (ambos os perfis) |
+| File | Exports | Description |
+|------|---------|-------------|
+| `Login.jsx` | `default Login` | Full login UI: profile selection, credentials form, loading ritual |
+
+`Login` receives `onLogin({ profile, formData })` from `LoginPage`. Has no routing knowledge.
+
+---
+
+## Layer: src/ — Integration
+
+| File | Responsibility |
+|------|----------------|
+| `main.jsx` | `createRoot` + `BrowserRouter` |
+| `App.jsx` | Provider host — renders `<AppRoutes />` only |
+| `routes/AppRoutes.jsx` | Declarative route config |
+| `pages/LoginPage.jsx` | Builds session, navigates to shell |
+| `pages/StudentShellPage.jsx` | Reads session + `?view=`, injects props into student shell |
+| `pages/TeacherShellPage.jsx` | Reads session + `?view=`, injects props into teacher shell |
+| `lib/demoSession.js` | Session CRUD on `localStorage` |
+| `lib/launchExperience.js` | Welcome destination per profile |
+| `lib/pageLoaders.js` | Shell chunk preload |
+| `components/ProfileActionPanels.jsx` | Settings + help modals (both profiles) |
 | `components/StudentFeatures.jsx` | `RaioXSection` + `MentoriaView` |
 
-**Regra:** `src/` nunca contém lógica de produto (UX de vestibular, dados de estudo,
-visualizações específicas de módulo). Isso fica em `01-app-core/`.
-
 ---
 
-## Camada `01-app-core/` — Produto
+## Layer: 01-app-core/ (legacy — being drained)
 
-### Shell do aluno (`aluno.jsx`)
+**Do not create new files here.** All additions go to `src/features/`.
 
-Container principal do aluno. Exporta `default function App({ initialView, session, onLogout })`.
+### Student shell — `aluno.jsx`
 
-**Estrutura interna:**
+Export: `default function App({ initialView, session, onLogout })`
 
 ```
 AppProvider (Context)
   └── Layout
-        ├── <aside>  Sidebar com Navigation
-        ├── <header> Header com notificações, XP, perfil
+        ├── <aside>  Sidebar + NAVIGATION_SECTIONS
+        ├── <header> Notifications, XP, Profile
         └── <main>
               └── <Suspense>
-                    └── view ativa baseada em currentView
+                    └── view selected by currentView
 ```
 
-**Views inline** (definidas dentro de `aluno.jsx`):
+**Views inline** (in `aluno.jsx`, extracted when > 80 lines):
 
-| View ID | Componente | Descrição |
-|---------|-----------|-----------|
-| `dashboard` | `DashboardView` | KPIs, progresso, timeline |
-| `raio-x` | `RaioXSection` (importado) | Incidência por vestibular |
-| `diagnostico` | `DiagnosticoView` | Autopercepção 1–5 por tópico |
-| `cronograma` | `CronogramaView` | Grade semanal mockada |
-| `leituras` | `LeiturasView` | Obras obrigatórias FUVEST |
-| `revisoes` | `RevisoesView` | Lista de revisões espaçadas |
-| `simulados` | `SimuladosView` | Performance histórica |
+| View ID | Component | Notes |
+|---------|-----------|-------|
+| `dashboard` | `DashboardView` | KPIs, timeline |
+| `raio-x` | `RaioXSection` (imported) | Bar charts by vestibular |
+| `diagnostico` | `DiagnosticoView` | Self-assessment 1–5 per topic |
+| `cronograma` | `CronogramaView` | Mocked weekly grid |
+| `leituras` | `LeiturasView` | Required readings list |
+| `revisoes` | `RevisoesView` | Spaced repetition list |
+| `simulados` | `SimuladosView` | Performance history |
 
-**Views lazy-loaded** (módulos externos):
+**Views lazy-loaded** (external modules):
 
-| View ID | Arquivo | Tipo |
-|---------|---------|------|
-| `calendario` | `calendario.jsx` | Calendário com date-fns |
-| `cronograma` | `cronograma.jsx` | Cronograma editável completo |
-| `leituras` | `leituras.jsx` | Hub de leituras completo |
-| `revisoes` | `revisoes.jsx` | Revisões espaçadas completo |
-| `simulados` | `simulados.jsx` | Tracker de simulados completo |
-| `pomodoro` | `pomodoro.jsx` | Timer Pomodoro + XP |
-| `aprovacao-fuvest` | `aprovacao-fuvest.jsx` | Estratégia FUVEST |
-| `discursiva-ia` | `discursiva-ia.jsx` | Redação discursiva com IA |
-| `redacao-ia-fuvest` | `redacao-ia-fuvest.jsx` | Feedback de redação FUVEST |
-| `simulador-tri` | `simulador-tri.jsx` | Simulador de nota TRI |
-| `tutoria` | `tutoria-ia.jsx` | Chat com IA tutora |
-| `mentoria` | `tutoria.jsx` | Mentoria com ex-alunos |
-| `humor` | `medidor-de-humor.jsx` | Tracker emocional |
-| `rede-de-apoio` | `rede-de-apoio.jsx` | Rede de suporte |
+| View ID | Current file | Target |
+|---------|-------------|--------|
+| `calendario` | `calendario.jsx` | `features/student/Calendar.jsx` |
+| `cronograma` | `cronograma.jsx` | `features/student/Schedule.jsx` |
+| `leituras` | `leituras.jsx` | `features/student/Readings.jsx` |
+| `revisoes` | `revisoes.jsx` | `features/student/Revisions.jsx` |
+| `simulados` | `simulados.jsx` | `features/assessments/Simulados.jsx` |
+| `pomodoro` | `pomodoro.jsx` | `features/student/Pomodoro.jsx` |
+| `aprovacao-fuvest` | `aprovacao-fuvest.jsx` | `features/assessments/FuvestApproval.jsx` |
+| `discursiva-ia` | `discursiva-ia.jsx` | `features/ai-tools/DiscursiveAI.jsx` |
+| `redacao-ia-fuvest` | `redacao-ia-fuvest.jsx` | `features/ai-tools/EssayReview.jsx` |
+| `simulador-tri` | `simulador-tri.jsx` | `features/assessments/TriSimulator.jsx` |
+| `tutoria` | `tutoria-ia.jsx` | `features/ai-tools/Tutoria.jsx` |
+| `mentoria` | `tutoria.jsx` | `features/student/Mentorship.jsx` |
+| `humor` | `medidor-de-humor.jsx` | `features/student/MoodTracker.jsx` |
+| `rede-de-apoio` | `rede-de-apoio.jsx` | `features/student/SupportNetwork.jsx` |
 
-**Views imersivas** (sem padding no container, full-screen):
+**Immersive views** (no container padding — full area):
 ```
 aprovacao-fuvest, discursiva-ia, redacao-ia-fuvest, simulador-tri,
 tutoria, mentoria, humor, rede-de-apoio
 ```
 
-### Shell do professor (`professor.jsx`)
+### Teacher shell — `professor.jsx`
 
-Container principal do professor. Exporta `default function TeacherShell({ initialView, session, onLogout })`.
+Export: `default function TeacherShell({ initialView, session, onLogout })`
 
-**Views disponíveis:**
-
-| View ID | Componente | Descrição |
-|---------|-----------|-----------|
-| `overview` | `OverviewView` | KPIs de turma, saudação, tabela de alunos |
-| `students` | `StudentsDetailView` | Análise individual de aluno |
-| `simulados-turma` | `SimuladosClassView` | Performance comparada da turma |
-| `attendance` | `AttendanceView` | Frequência e risco de evasão |
-| `planejador` | Lazy: `prof-planejador-de-aulas.jsx` | Planejador de aulas |
+| View ID | Component | Notes |
+|---------|-----------|-------|
+| `overview` | `OverviewView` | Class KPIs, student table |
+| `students` | `StudentsDetailView` | Individual student analysis |
+| `simulados-turma` | `SimuladosClassView` | Class performance |
+| `attendance` | `AttendanceView` | Attendance + dropout risk |
+| `planejador` | Lazy: `prof-planejador-de-aulas.jsx` | Lesson planner |
 
 ---
 
-## Fluxo de autenticação (demo)
+## Auth flow (demo)
 
 ```
-1. Usuário seleciona perfil + digita credenciais em nova-tela-login.jsx
+1. User: selects profile + credentials in features/auth/Login.jsx
 2. LoginPage.handleLogin({ profile, formData })
-3. buildDemoSession(profile, formData)         → { name, profile, hiddenViews }
-4. persistDemoSession(session)                 → localStorage['sinapse.demo-session']
-5. preloadShellPage(profile)                   → precarrega o chunk do shell
-6. navigate(getLaunchDestination(profile))     → /aluno ou /professor
-7. StudentShellPage lê session via getStoredDemoSession('aluno')
-8. Passa { initialView, session, onLogout } para aluno.jsx
+3. buildDemoSession()       → { name, profile, hiddenViews }
+4. persistDemoSession()     → localStorage['sinapse.demo-session']
+5. preloadShellPage()       → preloads shell chunk
+6. navigate()               → /aluno or /professor
+7. StudentShellPage         → getStoredDemoSession() → passes { initialView, session, onLogout }
 ```
 
-Contas embutidas em `demoSession.js`:
+Demo accounts (`demoSession.js`):
 
-| Usuário | Senha | Perfil | Restrições |
-|---------|-------|--------|-----------|
-| valentina | valentina | aluno | `discursiva-ia` oculta |
-| pedro | pedro | aluno | sem restrições |
-| qualquer | qualquer | professor | sem restrições |
+| User | Password | Profile | Restrictions |
+|------|----------|---------|--------------|
+| valentina | valentina | student | `discursiva-ia` hidden |
+| pedro | pedro | student | none |
+| any | any | teacher | none |
 
 ---
 
-## Sistema de navegação interna
+## React Contexts
 
-A navegação dentro dos shells **não usa React Router**. Usa `AppContext`:
-
-```
-currentView ──────────► condicional no <Suspense>
-     ▲                         ▼
-navigate(id) ◄── SidebarItem, BottomNav, botões de módulo
-     │
-     └── setSidebarOpen(false)  // fecha sidebar em mobile
-```
-
-O wrapper `StudentShellPage` sincroniza `currentView` com `?view=` na URL via
-`useSearchParams`, permitindo bookmarking e navegação pelo histórico do browser.
-
----
-
-## Contextos React
-
-### `AppContext` (aluno.jsx)
+### AppContext (aluno.jsx)
 
 ```ts
 interface AppContextValue {
-  currentView: string;       // view ativa
+  currentView: string;
   navigate: (id: string) => void;
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   user: { name: string; turma: string; xp: number; level: number };
   addXp: (amount: number) => void;
-  hiddenViews: string[];     // views desabilitadas para a conta
+  hiddenViews: string[];
 }
 ```
 
-### `TeacherContext` (professor.jsx)
+### TeacherContext (professor.jsx)
 
 ```ts
 interface TeacherContextValue {
@@ -198,74 +271,76 @@ interface TeacherContextValue {
 }
 ```
 
----
-
-## Componentes compartilhados (`src/components/`)
-
-### `ProfileActionPanels.jsx`
-
-Exports nomeados:
-- `AccountSettingsModal` — configurações por perfil, salvas em `localStorage`.
-- `AccountHelpModal` — canal de suporte com mailto e clipboard.
-- `SUPPORT_EMAIL` — constante: `plfonseca@usp.br`.
-
-Internamente usa `ModalFrame` (não exportado), que gerencia: overlay, Escape key,
-body scroll lock, `max-h-[90vh]`, `overflow-y-auto`.
-
-### `StudentFeatures.jsx`
-
-Exports nomeados:
-- `RaioXSection` — abas ENEM/FUVEST/UNESP/UNICAMP + bar charts por disciplina.
-- `MentoriaView` — banner sticky de ex-alunos + slot `{children}` para o hub.
+Both contexts will be replaced by Zustand slices in SA-2.1.
 
 ---
 
-## Estratégia de dados
+## Shared components (src/components/)
 
-**Estado atual:** 100% mockado. Constantes definidas no topo do arquivo que as usa.
+### ProfileActionPanels.jsx
+
+Named exports: `AccountSettingsModal`, `AccountHelpModal`, `SUPPORT_EMAIL`.
+Internal `ModalFrame`: overlay, Escape key, body scroll lock, `max-h-[90vh]`.
+
+### StudentFeatures.jsx
+
+Named exports:
+- `RaioXSection` — ENEM/FUVEST/UNESP/UNICAMP tabs + bar charts per subject.
+- `MentoriaView` — sticky ex-alumni banner + `{children}` slot.
+
+---
+
+## Data strategy
+
+All mocked. Constants defined at top of consuming file (SCREAMING_SNAKE_CASE).
+
+| Constant | Location | Target (Sprint SA-3) |
+|----------|----------|-----------------------|
+| `INITIAL_STUDENT_NOTIFICATIONS` | `aluno.jsx` | `services/notifications.js` |
+| `mockDashboard`, `booksData` | `aluno.jsx` | `services/student.js` |
+| `MOCK_MENTORS` | `tutoria.jsx` | `services/mentors.js` |
+| `MOCK_STUDENTS` | `professor.jsx` | `services/teacher.js` |
+| `RAIOX_DATA` | `StudentFeatures.jsx` | `services/raiox.js` |
+
+---
+
+## Cross-layer import rules
+
+| Importing from | Allowed imports | Forbidden |
+|----------------|----------------|-----------|
+| `src/features/*` | `src/components/`, `src/lib/`, `src/store/` | `src/pages/`, other feature slices |
+| `src/pages/` | `src/features/`, `src/components/`, `src/lib/` | `01-app-core/` |
+| `src/routes/` | `src/pages/` | — |
+| `src/components/` | `src/lib/` | `src/pages/`, `src/features/`, `01-app-core/` |
+| `01-app-core/` (legacy) | `src/components/`, `src/lib/` | `src/pages/` |
+
+**Relative paths by source location:**
 
 ```
-INITIAL_STUDENT_NOTIFICATIONS  →  aluno.jsx
-mockDashboard, booksData, etc. →  aluno.jsx
-MOCK_MENTORS                   →  tutoria.jsx
-MOCK_STUDENTS                  →  professor.jsx
-RAIOX_DATA                     →  StudentFeatures.jsx
+from src/features/auth/      →  ../../components/...   ../../lib/...
+from src/features/student/   →  ../../components/...   ../../lib/...
+from src/components/         →  ../lib/...
+from src/pages/              →  ../features/...         ../lib/...
+from src/routes/             →  ../pages/...
+from 01-app-core/            →  ../src/components/...  ../src/lib/...
 ```
 
-**Próximo passo:** substituir por `src/lib/api.js` com fetches reais (Sprint 3).
-O padrão de substituição é: trocar a constante por um `useState` com `useEffect`
-de fetch, sem alterar a interface dos componentes visuais.
+---
+
+## Integration rules
+
+1. New modules → `src/features/{domain}/`, not `01-app-core/`.
+2. `src/` has no product logic (vestibular UX, study data, module-specific views).
+3. `src/components/` uses named exports only.
+4. Extract inline shell views when > 80 lines of JSX.
+5. Delete `01-app-core/` original after migrating to `src/features/`.
+6. `npm run build` must pass zero errors after every structural change.
 
 ---
 
-## Regras de integração
+## What NOT to do
 
-1. Todo módulo novo em `01-app-core/` deve ser integrado ao shell relevante antes
-   de ser considerado completo.
-2. `src/` não contém lógica de produto.
-3. `01-app-core/` não importa de `src/pages/` — apenas de `src/components/` e `src/lib/`.
-4. Componentes usados por mais de um shell ficam em `src/components/`.
-5. Views inline ficam no shell até atingirem > 80 linhas de JSX, momento em que
-   devem ser extraídas para arquivo próprio em `01-app-core/`.
-
----
-
-## O que não fazer
-
-- Não adicione rotas no `App.jsx` para views internas (use o sistema de `currentView`).
-- Não passe o `navigate` do React Router para dentro dos shells.
-- Não deixe módulo novo acessível apenas por URL direta (integre ao shell).
-- Não mova arquivos de `01-app-core/` sem atualizar os lazy imports nos shells.
-- Não crie um terceiro shell sem discutir a arquitetura de contextos primeiro.
-
----
-
-## Próximas mudanças arquiteturais previstas
-
-| Sprint | Mudança | Impacto |
-|--------|---------|---------|
-| Sprint 3 | `src/lib/api.js` + hook `useFetch` | Baixo — substitui constantes |
-| Sprint 4 | `src/lib/auth.js` + hook `useAuth` | Médio — substitui `demoSession.js` |
-| Sprint 4 | Rota protegida em `App.jsx` | Baixo — adiciona guard |
-| Sprint 5 | `src/lib/claude.js` para chamadas AI | Baixo — novo arquivo |
-| Sprint 6 | `manifest.json` + Service Worker | Baixo — arquivos novos |
+- Do not add routes to `AppRoutes.jsx` for shell-internal views — use `currentView`.
+- Do not use `useNavigate()` inside `01-app-core/` — shells have no router knowledge.
+- Do not create files in `01-app-core/` — use `src/features/`.
+- Do not move files without updating lazy imports in the consuming shell.
