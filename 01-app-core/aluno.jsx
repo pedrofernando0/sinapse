@@ -7,6 +7,7 @@ import {
   Users, Sparkles, Settings, HelpCircle, LogOut
 } from 'lucide-react';
 import { AccountHelpModal, AccountSettingsModal } from '../src/components/ProfileActionPanels.jsx';
+import { RaioXSection, MentoriaView } from '../src/components/StudentFeatures.jsx';
 
 const CalendarManagerView = lazy(() =>
   import('./calendario.jsx').then((module) => ({ default: module.CalendarManagerView }))
@@ -56,31 +57,7 @@ const timelineData = [
   { period: '17 ago – 9 out 2026', event: 'FUVEST: Inscrições', date: '2026-08-17', status: 'future' },
 ];
 
-// Dados extraídos do seu exams_raiox.js
-const raioXData = {
-  enem: {
-    id: 'enem',
-    title: 'ENEM',
-    source: 'Dados compilados via Aprova Total (Raio-X ENEM 2024) e Estratégia Vestibulares.',
-    subjects: [
-      { name: 'Matemática', high: 'Matemática Básica, Estatística, Geometria Espacial', med: 'Funções, Geometria Plana, Probabilidade', reg: 'Geometria Analítica, Análise Combinatória' },
-      { name: 'Linguagens', high: 'Interpretação de Texto, Gêneros Textuais, Variação Linguística', med: 'Funções da Linguagem, Figuras de Linguagem', reg: 'Arte Contemporânea, Literatura Moderna' },
-      { name: 'Biologia', high: 'Ecologia, Fisiologia Humana e Citologia', med: 'Genética, Bioenergética', reg: 'Evolução, Zoologia' },
-    ]
-  },
-  fuvest: {
-    id: 'fuvest',
-    title: 'FUVEST (USP)',
-    source: 'Dados baseados nas estatísticas do Poliedro (últimos 10 anos) e SAS Educação.',
-    subjects: [
-      { name: 'Matemática', high: 'Geometria Plana e Espacial, Funções', med: 'Geometria Analítica, Análise Combinatória', reg: 'Matrizes, Polinômios' },
-      { name: 'Português', high: 'Literatura Brasileira (Obras Obrigatórias), Interpretação Crítica', med: 'Sintaxe, Movimentos Literários', reg: 'Ortografia' },
-      { name: 'Biologia', high: 'Ecologia, Genética Clássica, Fisiologia', med: 'Botânica, Zoologia, Evolução', reg: 'Imunologia' },
-    ]
-  }
-};
-
-// Novos dados extraídos dos seus arquivos base
+// Dados extraídos dos seus arquivos base
 const booksData = [
   { id: 1, title: 'Opúsculo Humanitário', author: 'Nísia Floresta', year: 1853, deadline: 'Abr–Mai', progress: 100 },
   { id: 2, title: 'Nebulosas', author: 'Narcisa Amália', year: 1872, deadline: 'Mai', progress: 45 },
@@ -224,7 +201,7 @@ const useApp = () => useContext(AppContext);
 
 const VIEW_TITLES = {
   dashboard: 'Início',
-  'raio-x': 'Raio-X Enem',
+  'raio-x': 'Raio-X',
   diagnostico: 'Diagnóstico',
   calendario: 'Calendário',
   cronograma: 'Cronograma',
@@ -259,7 +236,7 @@ const NAVIGATION_SECTIONS = [
     title: 'Estudos',
     items: [
       { id: 'dashboard', icon: Home, label: 'Início' },
-      { id: 'raio-x', icon: Search, label: 'Raio-X Enem' },
+      { id: 'raio-x', icon: Search, label: 'Raio-X' },
       { id: 'diagnostico', icon: Activity, label: 'Diagnóstico' },
     ],
   },
@@ -448,104 +425,6 @@ const TimelineView = () => {
               </div>
             );
           })}
-        </div>
-      </Card>
-    </div>
-  );
-};
-
-const RaioXView = () => {
-  const [activeExam, setActiveExam] = useState('enem');
-  const currentData = raioXData[activeExam];
-
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* Header do Raio-X */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">Raio-X de Incidência</h2>
-          <p className="text-slate-500 mt-1">O que mais cai em cada vestibular com base em Big Data.</p>
-        </div>
-        
-        {/* Seletor de Vestibular (Substitui o .exam-tab-selector) */}
-        <div className="flex bg-slate-100 p-1 rounded-xl w-full md:w-auto overflow-x-auto">
-          {Object.values(raioXData).map(exam => (
-            <button
-              key={exam.id}
-              onClick={() => setActiveExam(exam.id)}
-              className={`flex-1 md:flex-none px-6 py-2 text-sm font-bold rounded-lg transition-all whitespace-nowrap ${
-                activeExam === exam.id 
-                  ? 'bg-white text-blue-600 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              {exam.title}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <Card className="bg-gradient-to-br from-blue-50 to-indigo-50/30 border-blue-100">
-        <div className="flex items-start gap-4">
-          <div className="p-3 bg-blue-100 text-blue-600 rounded-xl">
-            <Search size={24} />
-          </div>
-          <div>
-            <h3 className="font-bold text-slate-800 text-lg">Fonte dos Dados</h3>
-            <p className="text-slate-600 text-sm mt-1">{currentData.source}</p>
-          </div>
-        </div>
-      </Card>
-
-      {/* Tabela de Incidência (Substitui o .data-table do CSS antigo) */}
-      <Card className="overflow-hidden p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500 font-bold">
-                <th className="p-4 w-1/4">Disciplina</th>
-                <th className="p-4 w-1/4"><span className="text-red-500 px-2 py-1 bg-red-50 rounded-full">Alta (Top 30%)</span></th>
-                <th className="p-4 w-1/4"><span className="text-orange-500 px-2 py-1 bg-orange-50 rounded-full">Média</span></th>
-                <th className="p-4 w-1/4"><span className="text-teal-500 px-2 py-1 bg-teal-50 rounded-full">Regular</span></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {currentData.subjects.map((subject, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="p-4 font-bold text-slate-800 align-top">
-                    {subject.name}
-                  </td>
-                  <td className="p-4 align-top">
-                    <div className="flex flex-wrap gap-2">
-                      {subject.high.split(',').map((topic, i) => (
-                        <span key={i} className="inline-block px-2 py-1 bg-white border border-red-200 text-slate-700 text-sm rounded-md shadow-sm">
-                          {topic.trim()}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="p-4 align-top">
-                    <div className="flex flex-wrap gap-2">
-                      {subject.med.split(',').map((topic, i) => (
-                        <span key={i} className="inline-block px-2 py-1 bg-white border border-orange-200 text-slate-700 text-sm rounded-md shadow-sm">
-                          {topic.trim()}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="p-4 align-top">
-                    <div className="flex flex-wrap gap-2">
-                      {subject.reg.split(',').map((topic, i) => (
-                        <span key={i} className="inline-block px-2 py-1 bg-white border border-teal-200 text-slate-700 text-sm rounded-md shadow-sm">
-                          {topic.trim()}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </Card>
     </div>
@@ -922,8 +801,11 @@ const Layout = ({ onLogout }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [notifAnimPhase, setNotifAnimPhase] = useState('idle'); // 'idle' | 'striking' | 'done'
+  const [struckIds, setStruckIds] = useState(new Set());
   const notificationsDropdownRef = useRef(null);
   const profileDropdownRef = useRef(null);
+  const animTimers = useRef([]);
   const unreadNotificationsCount = notifications.filter((notification) => notification.unread).length;
 
   const markNotificationAsRead = (notificationId) => {
@@ -935,12 +817,38 @@ const Layout = ({ onLogout }) => {
   };
 
   const markAllNotificationsAsRead = () => {
-    setNotifications((previousNotifications) =>
-      previousNotifications.map((notification) =>
-        notification.unread ? { ...notification, unread: false } : notification
-      )
+    if (notifAnimPhase !== 'idle') return;
+    const unread = notifications.filter((n) => n.unread);
+    if (!unread.length) return;
+
+    animTimers.current.forEach(clearTimeout);
+    animTimers.current = [];
+    setNotifAnimPhase('striking');
+
+    unread.forEach((notif, idx) => {
+      const t = setTimeout(() => {
+        setStruckIds((prev) => new Set([...prev, notif.id]));
+      }, idx * 280);
+      animTimers.current.push(t);
+    });
+
+    const doneDelay = unread.length * 280 + 400;
+    animTimers.current.push(
+      setTimeout(() => {
+        setNotifAnimPhase('done');
+        setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+      }, doneDelay)
+    );
+    animTimers.current.push(
+      setTimeout(() => {
+        setNotifAnimPhase('idle');
+        setStruckIds(new Set());
+        setShowNotifications(false);
+      }, doneDelay + 2200)
     );
   };
+
+  useEffect(() => () => animTimers.current.forEach(clearTimeout), []);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -1011,7 +919,15 @@ const Layout = ({ onLogout }) => {
             <div className="relative" ref={notificationsDropdownRef}>
               <button
                 onClick={() => {
-                  setShowNotifications((previousValue) => !previousValue);
+                  setShowNotifications((prev) => {
+                    if (!prev) {
+                      animTimers.current.forEach(clearTimeout);
+                      animTimers.current = [];
+                      setNotifAnimPhase('idle');
+                      setStruckIds(new Set());
+                    }
+                    return !prev;
+                  });
                   setShowProfileMenu(false);
                 }}
                 className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors relative ${
@@ -1036,41 +952,58 @@ const Layout = ({ onLogout }) => {
                     <button
                       onClick={markAllNotificationsAsRead}
                       className="text-xs font-semibold text-blue-600 hover:text-blue-700 disabled:text-slate-300"
-                      disabled={unreadNotificationsCount === 0}
+                      disabled={unreadNotificationsCount === 0 || notifAnimPhase !== 'idle'}
                     >
-                      Marcar como lidas
+                      {notifAnimPhase === 'striking' ? 'Marcando…' : 'Marcar como lidas'}
                     </button>
                   </div>
                   <div className="max-h-[320px] overflow-y-auto divide-y divide-slate-100">
-                    {notifications.map((notification) => (
-                      <button
-                        key={notification.id}
-                        onClick={() => markNotificationAsRead(notification.id)}
-                        className={`w-full p-4 text-left transition-colors flex gap-3 ${
-                          notification.unread ? 'bg-blue-50/40 hover:bg-blue-50' : 'hover:bg-slate-50'
-                        }`}
-                      >
-                        <div
-                          className={`p-2 rounded-full h-fit flex-shrink-0 ${
-                            notification.type === 'danger'
-                              ? 'bg-red-50 text-red-500'
-                              : notification.type === 'warning'
-                                ? 'bg-orange-50 text-orange-500'
-                                : 'bg-teal-50 text-teal-500'
-                          }`}
-                        >
-                          <notification.icon size={16} />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-start justify-between gap-3">
-                            <p className="font-bold text-sm text-slate-800">{notification.title}</p>
-                            {notification.unread && <span className="mt-1 w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />}
-                          </div>
-                          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{notification.text}</p>
-                          <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase">{notification.time}</p>
-                        </div>
-                      </button>
-                    ))}
+                    {notifAnimPhase === 'done' ? (
+                      <div className="flex flex-col items-center justify-center py-10 px-4 animate-in fade-in zoom-in-95 duration-500">
+                        <CheckCircle2 size={52} className="text-green-500" />
+                        <p className="mt-3 font-bold text-slate-800">Tudo limpo!</p>
+                        <p className="text-sm text-slate-500 mt-1 text-center">Nenhuma notificação pendente.</p>
+                      </div>
+                    ) : (
+                      notifications.map((notification) => {
+                        const isStruck = struckIds.has(notification.id);
+                        return (
+                          <button
+                            key={notification.id}
+                            onClick={() => markNotificationAsRead(notification.id)}
+                            className={`w-full p-4 text-left transition-all flex gap-3 ${
+                              isStruck
+                                ? 'opacity-40'
+                                : notification.unread
+                                  ? 'bg-blue-50/40 hover:bg-blue-50'
+                                  : 'hover:bg-slate-50'
+                            }`}
+                          >
+                            <div
+                              className={`p-2 rounded-full h-fit flex-shrink-0 ${
+                                notification.type === 'danger'
+                                  ? 'bg-red-50 text-red-500'
+                                  : notification.type === 'warning'
+                                    ? 'bg-orange-50 text-orange-500'
+                                    : 'bg-teal-50 text-teal-500'
+                              }`}
+                            >
+                              <notification.icon size={16} />
+                            </div>
+                            <div className={`min-w-0 transition-all ${isStruck ? 'line-through decoration-slate-400' : ''}`}>
+                              <div className="flex items-start justify-between gap-3">
+                                <p className="font-bold text-sm text-slate-800">{notification.title}</p>
+                                {notification.unread && !isStruck && (
+                                  <span className="mt-1 w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{notification.text}</p>
+                              <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase">{notification.time}</p>
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
               )}
@@ -1140,7 +1073,7 @@ const Layout = ({ onLogout }) => {
           >
             {currentView === 'dashboard' && <DashboardView />}
             {currentView === 'calendario' && <CalendarManagerView />}
-            {currentView === 'raio-x' && <RaioXView />}
+            {currentView === 'raio-x' && <RaioXSection />}
             {currentView === 'diagnostico' && <DiagnosticoView />}
             {currentView === 'cronograma' && <EditableScheduleView />}
             {currentView === 'leituras' && <ReadingHubView />}
@@ -1152,7 +1085,7 @@ const Layout = ({ onLogout }) => {
             {currentView === 'redacao-ia-fuvest' && <FuvestEssayLab />}
             {currentView === 'simulador-tri' && <ScoreSimulator />}
             {currentView === 'tutoria' && <AiTutoringHub user={user} />}
-            {currentView === 'mentoria' && <MentorshipHub />}
+            {currentView === 'mentoria' && <MentoriaView><MentorshipHub /></MentoriaView>}
             {currentView === 'humor' && <MoodTracker />}
             {currentView === 'rede-de-apoio' && <SupportNetwork />}
           </Suspense>
@@ -1195,7 +1128,7 @@ const Layout = ({ onLogout }) => {
           ].map((item) => (
             <button
               key={item.id}
-              onClick={() => useApp().navigate(item.id)}
+              onClick={() => navigate(item.id)}
               className={`flex flex-col items-center p-2 rounded-lg min-w-[64px] ${
                 currentView === item.id ? 'text-blue-600' : 'text-slate-400'
               }`}
