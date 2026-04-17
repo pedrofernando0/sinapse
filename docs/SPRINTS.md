@@ -31,9 +31,20 @@ Sprints semanais informais. Prioridade: P0 (bloqueante) → P3 (nice-to-have).
 - [x] SA-1.1: `src/routes/AppRoutes.jsx` criado — declarative router
 - [x] SA-1.1: `src/App.jsx` → provider host (3 linhas)
 - [x] SA-1.2: `src/main.jsx` → React 18 named imports (`createRoot`, `StrictMode`)
-- [x] SA-1.3: `src/features/auth/Login.jsx` migrado de `01-app-core/nova-tela-login.jsx`
-- [x] SA-1.3: `01-app-core/nova-tela-login.jsx` deletado (código morto após migração)
+- [x] SA-1.3: `src/features/auth/Login.jsx` migrado do legado de login
+- [x] SA-1.3: arquivo legado de login deletado após a migração
 - [x] SA-1.3: `src/pages/LoginPage.jsx` atualizado para importar de `features/auth/`
+- [x] SA-1.5: `src/features/student/StudentShell.jsx` migrado do shell legado do aluno
+- [x] SA-1.5: `src/pages/StudentShellPage.jsx` atualizado para importar do student slice
+- [x] SA-1.5: shell legado do aluno deletado apos a troca do shell
+- [x] SA-2.2: `src/features/teacher/TeacherShell.jsx` migrado de `legacy/teacher-shell.jsx`
+- [x] SA-2.2: `src/pages/TeacherShellPage.jsx` atualizado para importar do teacher slice
+- [x] SA-2.3: `src/features/ai-tools/DiscursiveAI.jsx`, `EssayReview.jsx` e `Tutoria.jsx` migrados
+- [x] SA-2.4: `src/features/assessments/Simulados.jsx`, `TriSimulator.jsx` e `FuvestApproval.jsx` migrados
+- [x] SA-2.5: `src/features/student/CalendarView.jsx`, `ScheduleView.jsx`, `Readings.jsx`, `Revisions.jsx`, `Pomodoro.jsx`, `Mentorship.jsx`, `MoodTracker.jsx` e `SupportNetwork.jsx` migrados
+- [x] SA-2.5: `src/pages/StudentShellPage.jsx` passou a injetar lazy views cross-slice no shell do aluno
+- [x] SA-2.6: `src/features/teacher/LessonPlanner.jsx` migrado de `legacy/lesson-planner.jsx`
+- [x] Runtime: `src/` não importa mais de `legacy/`
 
 #### Sprint 2 — Qualidade & Conteúdo (Abril 2026)
 
@@ -50,7 +61,7 @@ Sprints semanais informais. Prioridade: P0 (bloqueante) → P3 (nice-to-have).
 #### Sprint 1 — Fundação (Mar–Abr 2026)
 
 - [x] Shell do aluno (`aluno.jsx`) com 16 views
-- [x] Shell do professor (`professor.jsx`) com 5 views
+- [x] Shell do professor (`teacher-shell.jsx`) com 5 views
 - [x] Login com seleção de perfil
 - [x] Launch experience animada por perfil
 - [x] Sistema de sessão demo com `localStorage`
@@ -78,23 +89,15 @@ Sprints semanais informais. Prioridade: P0 (bloqueante) → P3 (nice-to-have).
 
 ### Sprint Arq — Refatoração Modular DDD (Abril–Maio 2026)
 
-> Migração de `01-app-core/` → `src/features/` (Feature-Sliced Design).
+> Migração de `legacy/` → `src/features/` (Feature-Sliced Design).
 > Ver `docs/ARCHITECTURE.md → Migration State` para o mapa completo de arquivos.
 > Branch: `claude/scale-edtech-platform-5scIb`
+> Itens concluídos ficam apenas na seção "Concluído" para manter o board limpo.
 
 | ID | Item | Prioridade | Status |
 |----|------|-----------|--------|
-| SA-1.1 | AppRoutes.jsx + App.jsx como provider host | P0 | ✅ Done |
-| SA-1.2 | main.jsx → React 18 named imports | P0 | ✅ Done |
-| SA-1.3 | `features/auth/Login.jsx` + delete `nova-tela-login.jsx` | P0 | ✅ Done |
-| SA-1.4 | `StudentShellPage` + `TeacherShellPage` → `<Outlet />` nested routes | P0 | 🟡 Next |
-| SA-1.5 | `aluno.jsx` → `features/student/StudentShell.jsx` | P0 | ⬜ |
+| SA-1.4 | `StudentShellPage` + `TeacherShellPage` → `<Outlet />` nested routes | P0 | 🟡 In progress |
 | SA-2.1 | Zustand setup: `store/sessionSlice.js` + `store/uiSlice.js` | P1 | ⬜ |
-| SA-2.2 | `professor.jsx` → `features/teacher/TeacherShell.jsx` | P1 | ⬜ |
-| SA-2.3 | AI modules → `features/ai-tools/` (3 files) | P1 | ⬜ |
-| SA-2.4 | Assessment modules → `features/assessments/` (3 files) | P1 | ⬜ |
-| SA-2.5 | Student modules → `features/student/` (8 files) | P2 | ⬜ |
-| SA-2.6 | Teacher modules → `features/teacher/` (1 file) | P2 | ⬜ |
 | SA-3.1 | `src/services/` layer — stub API clients | P1 | ⬜ |
 | SA-3.2 | Zustand wiring — replace Context in migrated shells | P1 | ⬜ |
 

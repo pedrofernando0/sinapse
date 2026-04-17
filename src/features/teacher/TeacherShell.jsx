@@ -5,8 +5,8 @@ import {
   GraduationCap, Calendar, Bell, Menu, FileText, Target,
   AlertTriangle, Trophy, Filter, Settings, HelpCircle, LogOut
 } from 'lucide-react';
-import { LessonPlannerView } from './prof-planejador-de-aulas.jsx';
-import { AccountHelpModal, AccountSettingsModal } from '../src/components/ProfileActionPanels.jsx';
+import LessonPlanner from './LessonPlanner.jsx';
+import { AccountHelpModal, AccountSettingsModal } from '../../components/ProfileActionPanels.jsx';
 
 // ============================================================================
 // 1. DADOS MOCKADOS
@@ -980,7 +980,7 @@ const Layout = ({ onLogout }) => {
         <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50">
           {currentView === 'overview' && <OverviewView />}
           {currentView === 'students' && <StudentsDetailView />}
-          {currentView === 'planner' && <LessonPlannerView />}
+          {currentView === 'planner' && <LessonPlanner />}
           {currentView === 'simulados-class' && <SimuladosClassView />}
           {currentView === 'attendance' && <AttendanceView />}
         </div>
@@ -993,7 +993,7 @@ const Layout = ({ onLogout }) => {
 // 6. COMPONENTE RAIZ
 // ============================================================================
 
-export default function TeacherApp({ initialView = 'overview', onLogout, session = null }) {
+export default function TeacherShell({ initialView = 'overview', onLogout, session = null }) {
   return (
     <TeacherProvider initialView={initialView} session={session}>
       <Layout onLogout={onLogout} />

@@ -549,7 +549,7 @@ const DashboardView = () => {
 // 5. SHELL PRINCIPAL (Layout e Navegação)
 // ============================================================================
 
-export default function MentorshipHub() {
+export default function Mentorship() {
   const [currentView, setCurrentView] = useState('discovery'); // discovery, profile, chat, dashboard
   const [selectedMentor, setSelectedMentor] = useState(null);
   const [showConfetti, setShowConfetti] = useState(false);

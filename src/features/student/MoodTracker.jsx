@@ -94,7 +94,7 @@ const generateMockMonth = () => {
 const MOCK_CALENDAR = generateMockMonth();
 
 // --- COMPONENTE PRINCIPAL ---
-export default function App() {
+export default function MoodTracker() {
   const [currentMood, setCurrentMood] = useState(null);
   const [quote, setQuote] = useState("");
   const [isAnimating, setIsAnimating] = useState(false);

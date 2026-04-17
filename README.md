@@ -73,8 +73,8 @@ npm run preview  # preview do build
 
 ```
 sinapse/
-├── 01-app-core/    # shells de produto e módulos de features
-├── src/            # bootstrap, roteamento, wrappers, componentes compartilhados
+├── legacy/         # diretório drenado; mantido vazio até a limpeza final
+├── src/            # bootstrap, roteamento, feature slices e componentes compartilhados
 ├── docs/           # documentação técnica
 │   ├── ARCHITECTURE.md   # design do sistema
 │   ├── SPRINTS.md        # kanban e backlog
@@ -98,7 +98,8 @@ Detalhes da arquitetura: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 /professor → shell do professor (requer sessão)
 ```
 
-Navegação interna aos shells usa estado via `AppContext` (não rotas adicionais).
+A navegação interna aos shells usa estado via `AppContext` e `TeacherContext`
+(não rotas adicionais).
 A URL reflete a view ativa via query param: `/aluno?view=raio-x`.
 
 ---

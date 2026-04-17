@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { 
-  BookOpen, Calendar, Clock, Sparkles, FileText, 
-  Eye, Edit3, Save, Download, LayoutDashboard, Target,
-  Lightbulb, Wrench, Share2, Loader2, CheckCircle2
+import {
+  BookOpen, Calendar, Clock, Sparkles, FileText,
+  Eye, Edit3, Save, Download, Target,
+  Lightbulb, Wrench, Loader2, CheckCircle2
 } from 'lucide-react';
 
 // ============================================================================
@@ -32,7 +32,7 @@ const Badge = ({ children, variant = 'default', className = '' }) => {
 // COMPONENTE PRINCIPAL: LESSON PLANNER VIEW
 // ============================================================================
 
-export const LessonPlannerView = () => {
+export default function LessonPlanner() {
   // Estados do Formulário
   const [formData, setFormData] = useState({
     title: '',
@@ -358,50 +358,6 @@ export const LessonPlannerView = () => {
       <div className="flex-1 pb-12">
         {isPreviewMode ? renderPreview() : renderEditor()}
       </div>
-    </div>
-  );
-};
-
-
-// ============================================================================
-// SHELL SIMULADO DO APP DO PROFESSOR (Apenas para visualização no Canvas)
-// ============================================================================
-
-export default function App() {
-  return (
-    <div className="flex h-screen bg-[#F8FAFC] text-slate-800 font-sans overflow-hidden">
-      {/* Sidebar Falsa */}
-      <aside className="hidden md:flex flex-col w-64 bg-white border-r border-slate-200 p-4">
-        <div className="flex items-center gap-3 px-2 mb-8 mt-2">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-blue-700 flex items-center justify-center text-white font-bold shadow-md">
-            P
-          </div>
-          <div>
-            <h1 className="font-bold text-slate-800 leading-tight">Painel Docente</h1>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cursinho da Poli</p>
-          </div>
-        </div>
-        <div className="space-y-1">
-          <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-6">Gestão</p>
-          <div className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-slate-500 hover:bg-slate-100 cursor-pointer">
-            <LayoutDashboard size={20} /> Visão Geral
-          </div>
-          <div className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100 cursor-pointer">
-            <BookOpen size={20} className="text-indigo-600" /> Planejador de Aula
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
-        <header className="h-16 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center px-8 shrink-0">
-          <h1 className="font-bold text-lg text-slate-800">Planejador de Aula</h1>
-        </header>
-        
-        <div className="flex-1 overflow-y-auto p-4 md:p-8">
-          <LessonPlannerView />
-        </div>
-      </main>
     </div>
   );
 }

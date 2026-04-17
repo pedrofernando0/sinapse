@@ -210,7 +210,7 @@ const HistoricalChart = ({ historicalData, currentScore }) => {
 // 3. COMPONENTE PRINCIPAL
 // ============================================================================
 
-export default function App() {
+export default function TriSimulator() {
   const [scores, setScores] = useState({
     mat: 720,
     nat: 680,

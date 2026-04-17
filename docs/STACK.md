@@ -18,19 +18,17 @@ usada no projeto, padrões adotados e o que evitar.
 ### Padrões adotados
 
 ```jsx
-// Context pattern (AppContext em aluno.jsx, TeacherContext em professor.jsx)
+// Context pattern (AppContext em StudentShell.jsx, TeacherContext em TeacherShell.jsx)
 const AppContext = createContext();
 const AppProvider = ({ children, initialView }) => { ... };
 const useApp = () => useContext(AppContext); // hook de acesso
 
 // Lazy loading de módulo de feature
-const CalendarManagerView = lazy(() =>
-  import('./calendario.jsx').then(m => ({ default: m.CalendarManagerView }))
-);
+const CalendarView = lazy(() => import('./CalendarView.jsx'));
 
 // Suspense com fallback mínimo
 <Suspense fallback={<div className="...">Carregando módulo...</div>}>
-  {currentView === 'calendario' && <CalendarManagerView />}
+  {currentView === 'calendario' && <CalendarView />}
 </Suspense>
 ```
 
@@ -73,8 +71,9 @@ npm run preview  # preview do /dist em localhost
 **Versão:** 7.14.1 | **Docs:** reactrouter.com
 
 ### Como é usado
-No projeto, o React Router cuida apenas do **roteamento entre shells**. A navegação
-*dentro* de cada shell é gerenciada por estado local (`currentView` no `AppContext`).
+No projeto, o React Router cuida apenas do **roteamento entre shells**. A
+navegação *dentro* de cada shell é gerenciada por estado local (`currentView`
+em `AppContext` ou `TeacherContext`).
 
 ```
 Rotas reais (React Router):
@@ -84,16 +83,20 @@ Rotas reais (React Router):
 
 Navegação interna (estado):
   AppContext.navigate('raio-x')  →  muda currentView → URL vira /aluno?view=raio-x
+  TeacherContext.navigate('planner') → muda currentView → URL vira /professor?view=planner
 ```
 
 ### Query param sync
-`StudentShellPage` lê `?view=` via `useSearchParams()` e passa como `initialView`
-para o shell. O shell não escreve diretamente na URL — o wrapper cuida disso.
+`StudentShellPage` lê `?view=` via `useSearchParams()`, resolve a sessão e injeta
+`initialView` no shell. Quando a view pertence a outro slice (`ai-tools/` ou
+`assessments/`), o wrapper também monta o mapa de lazy imports e o passa para
+`StudentShell.jsx`. O shell não escreve diretamente na URL — o wrapper cuida
+disso.
 
 ### O que evitar
-- Não crie rotas novas em `App.jsx` para views internas dos shells. Use o sistema de
+- Não crie rotas novas em `src/routes/AppRoutes.jsx` para views internas dos shells. Use o sistema de
   `currentView`.
-- Não use `useNavigate()` dentro de `01-app-core/` — os shells não conhecem o roteador.
+- Não use `useNavigate()` dentro dos shells — os shells não conhecem o roteador.
 - Não use `<Link>` para navegação interna dos shells.
 
 ---
@@ -112,11 +115,12 @@ safe area em mobile.
 content: [
   './index.html',
   './src/**/*.{js,jsx}',
-  './01-app-core/**/*.{js,jsx}',   // ← inclui os módulos
+  './legacy/**/*.{js,jsx}',        // ← mantido por compatibilidade enquanto o diretório existir
 ]
 ```
 
-Se criar um arquivo em novo diretório (ex.: `features/`), adicione o glob aqui.
+Se criar código fora de `src/` ou fora dos caminhos já cobertos, adicione o
+glob correspondente aqui.
 
 ### Plugins
 `tailwindcss-animate` — fornece utilitários `animate-in`, `fade-in`, `zoom-in-95`,

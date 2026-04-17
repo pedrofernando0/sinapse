@@ -65,7 +65,7 @@ const Button = ({ children, onClick, variant = 'primary', disabled = false, clas
 // COMPONENTE PRINCIPAL
 // ============================================================================
 
-export default function SecondPhaseDiscursive() {
+export default function DiscursiveAI() {
   const [activeTab, setActiveTab] = useState('resposta'); // 'rascunho' | 'resposta'
   const [draftText, setDraftText] = useState('');
   const [answerText, setAnswerText] = useState('');

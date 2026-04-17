@@ -24,24 +24,7 @@ npm run preview    # preview do build de produção
 
 ```
 sinapse/
-├── 01-app-core/              # LEGADO — sendo drenado para src/features/ (Sprint Arq)
-│   ├── aluno.jsx             # → features/student/StudentShell.jsx (pendente SA-1.5)
-│   ├── professor.jsx         # → features/teacher/TeacherShell.jsx (pendente SA-2.2)
-│   ├── aprovacao-fuvest.jsx  # → features/assessments/FuvestApproval.jsx
-│   ├── calendario.jsx        # → features/student/Calendar.jsx
-│   ├── cronograma.jsx        # → features/student/Schedule.jsx
-│   ├── discursiva-ia.jsx     # → features/ai-tools/DiscursiveAI.jsx
-│   ├── leituras.jsx          # → features/student/Readings.jsx
-│   ├── medidor-de-humor.jsx  # → features/student/MoodTracker.jsx
-│   ├── pomodoro.jsx          # → features/student/Pomodoro.jsx
-│   ├── prof-planejador-de-aulas.jsx  # → features/teacher/LessonPlanner.jsx
-│   ├── redacao-ia-fuvest.jsx # → features/ai-tools/EssayReview.jsx
-│   ├── rede-de-apoio.jsx     # → features/student/SupportNetwork.jsx
-│   ├── revisoes.jsx          # → features/student/Revisions.jsx
-│   ├── simulador-tri.jsx     # → features/assessments/TriSimulator.jsx
-│   ├── simulados.jsx         # → features/assessments/Simulados.jsx
-│   ├── tutoria-ia.jsx        # → features/ai-tools/Tutoria.jsx
-│   └── tutoria.jsx           # → features/student/Mentorship.jsx
+├── legacy/                   # diretório drenado; mantido vazio até a limpeza final
 │
 ├── src/
 │   ├── App.jsx               # provider host — renderiza <AppRoutes /> apenas
@@ -51,8 +34,29 @@ sinapse/
 │   │   ├── ProfileActionPanels.jsx
 │   │   └── StudentFeatures.jsx
 │   ├── features/             # domínios de produto (Feature-Sliced Design)
-│   │   └── auth/
-│   │       └── Login.jsx     # ✅ migrado de nova-tela-login.jsx
+│   │   ├── auth/
+│   │   │   └── Login.jsx
+│   │   ├── student/
+│   │   │   ├── StudentShell.jsx
+│   │   │   ├── CalendarView.jsx
+│   │   │   ├── ScheduleView.jsx
+│   │   │   ├── Readings.jsx
+│   │   │   ├── Revisions.jsx
+│   │   │   ├── Pomodoro.jsx
+│   │   │   ├── Mentorship.jsx
+│   │   │   ├── MoodTracker.jsx
+│   │   │   └── SupportNetwork.jsx
+│   │   ├── teacher/
+│   │   │   ├── TeacherShell.jsx
+│   │   │   └── LessonPlanner.jsx
+│   │   ├── assessments/
+│   │   │   ├── Simulados.jsx
+│   │   │   ├── TriSimulator.jsx
+│   │   │   └── FuvestApproval.jsx
+│   │   └── ai-tools/
+│   │       ├── Tutoria.jsx
+│   │       ├── DiscursiveAI.jsx
+│   │       └── EssayReview.jsx
 │   ├── lib/
 │   │   ├── demoSession.js
 │   │   ├── launchExperience.js
@@ -75,7 +79,7 @@ sinapse/
 └── README.md                 # visão geral pública do projeto
 ```
 
-> **Não crie arquivos novos em `01-app-core/`.** Novos módulos vão em `src/features/{domínio}/`.
+> **Mantenha `legacy/` vazio.** Novos módulos vão em `src/features/{domínio}/`.
 
 ---
 
@@ -87,11 +91,11 @@ src/features/ →  domínios de produto (Feature-Sliced Design) — crescendo
 src/pages/    →  entry points de rotas: orquestram features + libs
 src/components/ → componentes presentacionais compartilhados
 src/lib/      →  sessão, experiência de lançamento, preload
-01-app-core/  →  LEGADO: shells + módulos aguardando migração para src/features/
+legacy/       →  diretório drenado, sem dependências de runtime a partir de src/
 ```
 
 `src/features/*` não importa de `src/pages/` nem de outros feature slices.
-`01-app-core/` não importa de `src/pages/` nem de `src/features/`.
+Orquestração cross-slice para shells acontece em `src/pages/*ShellPage.jsx`.
 
 ---
 
@@ -104,13 +108,16 @@ src/main.jsx  (createRoot + BrowserRouter)
               ├── /  /login   → LoginPage → features/auth/Login.jsx
               │                  └── handleLogin() → buildDemoSession() → navigate(/aluno)
               ├── /aluno/*    → StudentShellPage
-              │                  └── 01-app-core/aluno.jsx  (pendente SA-1.5)
+              │                  ├── lê sessão + ?view=
+              │                  ├── injeta lazy views cross-slice quando necessário
+              │                  └── features/student/StudentShell.jsx
               └── /professor/* → TeacherShellPage
-                                  └── 01-app-core/professor.jsx  (pendente SA-2.2)
+                                  └── features/teacher/TeacherShell.jsx
 ```
 
-Navegação interna aos shells **não usa React Router**: usa `AppContext.navigate(view)`
-que atualiza `currentView` no estado local, refletido em `?view=` pelo wrapper.
+Navegação interna aos shells **não usa React Router**: usa
+`AppContext.navigate(view)` no aluno e `TeacherContext.navigate(view)` no
+professor, refletindo `currentView` em `?view=` pelo wrapper.
 
 ---
 
@@ -147,7 +154,7 @@ Fontes: `Fraunces` (serifada, usada em headings de destaque) e `Manrope` (sans-s
 
 ## Padrões de componente
 
-### Primitivos reutilizáveis (definidos em `aluno.jsx`)
+### Primitivos reutilizáveis (definidos em `src/features/student/StudentShell.jsx`)
 
 ```jsx
 <Card className="...">           // bg-white/80 backdrop-blur-md, rounded-2xl
@@ -161,11 +168,11 @@ Fontes: `Fraunces` (serifada, usada em headings de destaque) e `Manrope` (sans-s
 <AccountHelpModal     open={bool} onClose={fn} profile="student" userName="..." />
 ```
 
-O `ModalFrame` interno já lida com: `max-h-[90vh]`, `overflow-y-auto`, Escape key, body scroll lock.
+O `ModalFrame` exportado já lida com: `max-h-[90vh]`, `overflow-y-auto`, Escape key, body scroll lock.
 
 ### Views imersivas (full-screen)
 
-Módulos em `IMMERSIVE_VIEWS` (Set em `aluno.jsx`) recebem a área de conteúdo sem
+Módulos em `IMMERSIVE_VIEWS` (Set em `src/features/student/StudentShell.jsx`) recebem a área de conteúdo sem
 padding. Para adicionar banner/header a um módulo imersivo, use `position: sticky top-0`
 (ver `MentoriaView` em `src/components/StudentFeatures.jsx` como referência).
 
@@ -173,27 +180,28 @@ padding. Para adicionar banner/header a um módulo imersivo, use `position: stic
 
 ## Como adicionar uma view ao shell do aluno
 
-1. Crie o módulo em `01-app-core/nome-modulo.jsx` com um `export default`.
-2. Lazy-importe no topo de `aluno.jsx`:
-   ```jsx
-   const MeuModulo = lazy(() => import('./nome-modulo.jsx'));
-   ```
-3. Adicione a entrada em `VIEW_TITLES` (string localizada).
-4. Adicione um item em `NAVIGATION_SECTIONS` (com icon Lucide e label).
-5. Se for imersivo, adicione o id em `IMMERSIVE_VIEWS`.
-6. Adicione o condicional no bloco `<Suspense>`:
-   ```jsx
-   {currentView === 'meu-modulo' && <MeuModulo />}
-   ```
-7. Atualize `docs/ARCHITECTURE.md` e `docs/SPRINTS.md`.
+1. Defina o slice correto:
+   - `src/features/student/` se a view é estritamente do domínio do aluno.
+   - `src/features/assessments/` ou `src/features/ai-tools/` se a view pertence a
+     esses domínios, mesmo sendo renderizada dentro do shell do aluno.
+2. Se a view ficar em `src/features/student/`, crie o módulo com `export default`
+   e faça o lazy import diretamente em `src/features/student/StudentShell.jsx`.
+3. Se a view ficar em outro slice, crie o módulo no slice correto e faça o lazy
+   import em `src/pages/StudentShellPage.jsx`, adicionando a entrada no objeto
+   `STUDENT_SHELL_EXTERNAL_VIEWS`.
+4. Em `src/features/student/StudentShell.jsx`, adicione a entrada em
+   `VIEW_TITLES`, `NAVIGATION_SECTIONS`, `IMMERSIVE_VIEWS` (se aplicável) e no
+   bloco de renderização correspondente.
+5. Atualize `docs/ARCHITECTURE.md` e `docs/SPRINTS.md`.
 
 ---
 
 ## Como adicionar uma view ao shell do professor
 
-Mesmo fluxo, porém em `professor.jsx` usando `TeacherContext` e
-`TEACHER_NAVIGATION_SECTIONS`. Não há `IMMERSIVE_VIEWS` no shell do professor —
-todos os módulos recebem padding padrão.
+Mesmo fluxo, porém em `src/features/teacher/TeacherShell.jsx` usando
+`TeacherContext`, os itens de `SidebarItem` e o bloco de renderização por
+`currentView`. Não há `IMMERSIVE_VIEWS` no shell do professor — todos os
+módulos recebem padding padrão.
 
 ---
 
@@ -203,30 +211,30 @@ todos os módulos recebem padding padrão.
 // Ícones — SEMPRE de lucide-react, verifique o nome em lucide.dev
 import { Home, Bell, Star, CheckCircle2 } from 'lucide-react';
 
-// Componentes compartilhados — de qualquer camada:
-import { AccountSettingsModal, AccountHelpModal } from '../src/components/ProfileActionPanels.jsx'; // de 01-app-core/
-import { AccountSettingsModal, AccountHelpModal } from '../../components/ProfileActionPanels.jsx';  // de src/features/*/
+// Componentes compartilhados — de src/features/*/
+import { AccountSettingsModal, AccountHelpModal } from '../../components/ProfileActionPanels.jsx';
 
-import { RaioXSection, MentoriaView } from '../src/components/StudentFeatures.jsx'; // de 01-app-core/
-import { RaioXSection, MentoriaView } from '../../components/StudentFeatures.jsx';  // de src/features/*/
+import { RaioXSection, MentoriaView } from '../../components/StudentFeatures.jsx';
 
-// Sessão (use só em src/pages/ ou src/features/)
-import { getStoredDemoSession, clearDemoSession } from '../src/lib/demoSession.js'; // de 01-app-core/
+// Sessão
 import { getStoredDemoSession, clearDemoSession } from '../../lib/demoSession.js';  // de src/features/*/
+import TeacherShell from '../features/teacher/TeacherShell.jsx';                    // de src/pages/
 ```
 
 | Importando de | Caminho para src/components/ | Caminho para src/lib/ |
 |---------------|-----------------------------|-----------------------|
-| `01-app-core/` | `../src/components/...` | `../src/lib/...` |
 | `src/features/auth/` | `../../components/...` | `../../lib/...` |
 | `src/features/student/` | `../../components/...` | `../../lib/...` |
+| `src/features/teacher/` | `../../components/...` | `../../lib/...` |
+| `src/features/assessments/` | `../../components/...` | `../../lib/...` |
+| `src/features/ai-tools/` | `../../components/...` | `../../lib/...` |
 | `src/pages/` | `../components/...` | `../lib/...` |
 
 ---
 
 ## O que NÃO fazer
 
-- Não criar rotas novas em `App.jsx` para features que já cabem dentro de um shell.
+- Não criar rotas novas em `src/routes/AppRoutes.jsx` para features que já cabem dentro de um shell.
 - Não usar CSS modules, styled-components ou classes customizadas — **somente Tailwind**.
 - Não chamar hooks fora do render de componentes (ex.: hook em event handler).
 - Não remover o fluxo login-first sem alinhamento explícito.

@@ -1,5 +1,5 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import TeacherShell from '../../01-app-core/professor.jsx';
+import TeacherShell from '../features/teacher/TeacherShell.jsx';
 import { clearDemoSession, getStoredDemoSession } from '../lib/demoSession.js';
 
 export default function TeacherShellPage() {

@@ -98,7 +98,7 @@ const Timer = ({ initialSeconds = 14400 }) => { // 4 horas padrão FUVEST
 // COMPONENTE PRINCIPAL
 // ============================================================================
 
-export default function FuvestEssayLab() {
+export default function EssayReview() {
   const [text, setText] = useState(TEXTO_INICIAL);
   const [focusMode, setFocusMode] = useState(false);
   const [viewMode, setViewMode] = useState('edit'); // 'edit' | 'analyzing' | 'review'

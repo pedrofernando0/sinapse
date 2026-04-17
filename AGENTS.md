@@ -15,7 +15,7 @@ Se alguma resposta for "não sei", leia o arquivo indicado antes de continuar.
 |----------|---------------------|
 | Qual shell recebe a feature? | `docs/ARCHITECTURE.md` → seção Student/Teacher shell |
 | O arquivo já foi migrado para `src/features/`? | `docs/ARCHITECTURE.md` → Migration naming map |
-| O módulo ainda está em `01-app-core/`? | `ls 01-app-core/` |
+| O módulo ainda está em `legacy/`? | `ls legacy/` |
 | Algum componente de `src/components/` já resolve o problema? | `src/components/` |
 | O ícone que preciso existe no Lucide? | Consulte `lucide.dev` ou `grep -r "from 'lucide-react'" src/` |
 | A mudança quebra algum import existente? | Verifique `import` e `export default` no arquivo alvo |
@@ -130,9 +130,8 @@ const MeuComponente = ({ propA, propB }) => {
 | Handler | `handle` + evento | `handleMarkAllRead` |
 | Variável booleana | `is/has/show/can` + substantivo | `isImmersiveView` |
 | Constante de dado | SCREAMING_SNAKE_CASE | `INITIAL_STUDENT_NOTIFICATIONS` |
-| Arquivo módulo (legado 01-app-core/) | kebab-case | `aprovacao-fuvest.jsx` |
 | Arquivo componente React | PascalCase | `StudentFeatures.jsx`, `Login.jsx` |
-| Arquivo componente migrado (src/features/) | PascalCase **em inglês** | `FuvestApproval.jsx`, `MoodTracker.jsx` |
+| Arquivo componente migrado (src/features/) | PascalCase **em inglês** | `CalendarView.jsx`, `MoodTracker.jsx` |
 | Diretório de feature | lowercase inglês | `auth`, `student`, `ai-tools` |
 
 ---
@@ -212,15 +211,13 @@ from src/features/assessments/  →  ../../components/...   ../../lib/...
 from src/pages/                 →  ../features/...         ../lib/...
 from src/routes/                →  ../pages/...
 from src/components/            →  ../lib/...
-
-# Arquivos ainda em 01-app-core/ (legado)
-from 01-app-core/               →  ../src/components/...  ../src/lib/...
 ```
 
 Regras absolutas:
-- `01-app-core/` nunca importa de `src/pages/` ou `src/features/`.
-- `src/lib/` nunca importa de `01-app-core/` ou `src/features/`.
+- `src/lib/` nunca importa de `legacy/` ou `src/features/`.
 - `src/features/*` nunca importa diretamente de outro feature slice.
+- Orquestração cross-slice para shells acontece em `src/pages/*ShellPage.jsx`,
+  não dentro de `src/features/*`.
 
 ---
 
@@ -230,29 +227,47 @@ Execute exatamente nesta ordem:
 
 ```bash
 # Passo 0: verifique se o módulo já existe
-ls 01-app-core/ | grep nome-do-modulo
+rg --files src/features | grep NomeModulo
 ```
 
 ```jsx
-// Passo 1: crie 01-app-core/nome-modulo.jsx
+// Passo 1: defina o slice correto da view
+// student/ se for domínio do aluno
+// assessments/ ou ai-tools/ se a view pertencer a esses domínios
+
+// Passo 2a: se a view ficar em src/features/student/, crie o módulo
 export default function NomeModulo() {
   return <div>...</div>;
 }
 
-// Passo 2: lazy-importe em aluno.jsx (junto aos outros lazy imports, no topo)
-const NomeModulo = lazy(() => import('./nome-modulo.jsx'));
+// Passo 2b: se a view ficar em src/features/student/,
+// lazy-importe em StudentShell.jsx
+const NomeModulo = lazy(() => import('./NomeModulo.jsx'));
 
-// Passo 3: adicione em VIEW_TITLES (aluno.jsx)
+// Passo 2c: se a view ficar em assessments/ ou ai-tools/,
+// lazy-importe em src/pages/StudentShellPage.jsx
+const NomeModuloView = lazy(() => import('../features/assessments/NomeModulo.jsx'));
+
+const STUDENT_SHELL_EXTERNAL_VIEWS = {
+  NomeModuloView,
+};
+
+// Passo 3: adicione em VIEW_TITLES (StudentShell.jsx)
 'nome-modulo': 'Label Localizada',
 
-// Passo 4: adicione em NAVIGATION_SECTIONS (aluno.jsx)
+// Passo 4: adicione em NAVIGATION_SECTIONS (StudentShell.jsx)
 { id: 'nome-modulo', icon: IconeLucide, label: 'Label Localizada' },
 
-// Passo 5 (se imersivo): adicione em IMMERSIVE_VIEWS (aluno.jsx)
+// Passo 5 (se imersivo): adicione em IMMERSIVE_VIEWS (StudentShell.jsx)
 const IMMERSIVE_VIEWS = new Set(['...', 'nome-modulo']);
 
-// Passo 6: adicione no bloco Suspense (aluno.jsx)
+// Passo 6a: se a view ficou em src/features/student/,
+// adicione no bloco Suspense / renderização (StudentShell.jsx)
 {currentView === 'nome-modulo' && <NomeModulo />}
+
+// Passo 6b: se a view foi injetada via StudentShellPage.jsx,
+// use a referência recebida em externalViews
+{currentView === 'nome-modulo' && NomeModuloView && <NomeModuloView />}
 ```
 
 Atualize `docs/ARCHITECTURE.md` (lista de views do student shell) e
@@ -289,7 +304,7 @@ body scroll lock e `max-h-[90vh] overflow-y-auto`.
 Para criar um modal novo:
 
 ```jsx
-import { ModalFrame } from '../src/components/ProfileActionPanels.jsx'; // se extraído
+import { ModalFrame } from '../../components/ProfileActionPanels.jsx'; // de src/features/*
 // ou defina um ModalFrame local usando o mesmo padrão structural
 ```
 
@@ -406,3 +421,12 @@ Um agente deve pausar e solicitar confirmação humana quando:
 - O código original parece propositalmente escrito de um jeito "estranho" — pode
   ser um workaround intencional.
 - A tarefa requer uma dependência npm não listada em `package.json`.
+
+---
+
+## 14. Princípios de Execução Karpathy
+
+- **Think Before Coding**: Não assuma premissas. Não esconda confusão. Explicite trade-offs antes de implementar.
+- **Simplicity First**: Código mínimo para resolver o problema. Nenhuma flexibilidade especulativa não solicitada.
+- **Surgical Changes**: Toque apenas no que for estritamente necessário. Não reformate ou refatore código adjacente.
+- **Goal-Driven Execution**: Defina critérios de sucesso e divida a tarefa em passos verificáveis.

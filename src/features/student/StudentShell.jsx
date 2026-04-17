@@ -1,13 +1,20 @@
-import React, { useState, createContext, useContext } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState, createContext, useContext } from 'react';
 import { 
   Home, Activity, Calendar, Clock, BookOpen, RotateCcw, 
   CheckSquare, TrendingUp, Menu, X, Bell, Zap, Play, Search,
   CheckCircle2, AlertCircle, Clock3, ChevronRight, BookMarked,
-  Target, BarChart2, Edit2, Edit3
+  Target, BarChart2, FileText, PenTool, Heart, HeartHandshake,
+  Users, Sparkles, Settings, HelpCircle, LogOut
 } from 'lucide-react';
+import { AccountHelpModal, AccountSettingsModal } from '../../components/ProfileActionPanels.jsx';
+import { RaioXSection, MentoriaView } from '../../components/StudentFeatures.jsx';
+
+const CalendarManagerView = lazy(() => import('./CalendarView.jsx'));
+const EditableScheduleView = lazy(() => import('./ScheduleView.jsx'));
+const PomodoroView = lazy(() => import('./Pomodoro.jsx'));
 
 // ============================================================================
-// 1. DADOS MOCKADOS
+// 1. DADOS MOCKADOS (Extraídos dos seus arquivos .js)
 // ============================================================================
 
 const mockDashboard = {
@@ -27,29 +34,7 @@ const timelineData = [
   { period: '17 ago – 9 out 2026', event: 'FUVEST: Inscrições', date: '2026-08-17', status: 'future' },
 ];
 
-const raioXData = {
-  enem: {
-    id: 'enem',
-    title: 'ENEM',
-    source: 'Dados compilados via Aprova Total (Raio-X ENEM 2024) e Estratégia Vestibulares.',
-    subjects: [
-      { name: 'Matemática', high: 'Matemática Básica, Estatística, Geometria Espacial', med: 'Funções, Geometria Plana, Probabilidade', reg: 'Geometria Analítica, Análise Combinatória' },
-      { name: 'Linguagens', high: 'Interpretação de Texto, Gêneros Textuais, Variação Linguística', med: 'Funções da Linguagem, Figuras de Linguagem', reg: 'Arte Contemporânea, Literatura Moderna' },
-      { name: 'Biologia', high: 'Ecologia, Fisiologia Humana e Citologia', med: 'Genética, Bioenergética', reg: 'Evolução, Zoologia' },
-    ]
-  },
-  fuvest: {
-    id: 'fuvest',
-    title: 'FUVEST (USP)',
-    source: 'Dados baseados nas estatísticas do Poliedro (últimos 10 anos) e SAS Educação.',
-    subjects: [
-      { name: 'Matemática', high: 'Geometria Plana e Espacial, Funções', med: 'Geometria Analítica, Análise Combinatória', reg: 'Matrizes, Polinômios' },
-      { name: 'Português', high: 'Literatura Brasileira (Obras Obrigatórias), Interpretação Crítica', med: 'Sintaxe, Movimentos Literários', reg: 'Ortografia' },
-      { name: 'Biologia', high: 'Ecologia, Genética Clássica, Fisiologia', med: 'Botânica, Zoologia, Evolução', reg: 'Imunologia' },
-    ]
-  }
-};
-
+// Dados extraídos dos seus arquivos base
 const booksData = [
   { id: 1, title: 'Opúsculo Humanitário', author: 'Nísia Floresta', year: 1853, deadline: 'Abr–Mai', progress: 100 },
   { id: 2, title: 'Nebulosas', author: 'Narcisa Amália', year: 1872, deadline: 'Mai', progress: 45 },
@@ -70,6 +55,36 @@ const simuladosData = [
   { id: 3, name: 'FUVEST 2025 - 1ª Fase', date: '08 Mar 2026', acertos: 51, total: 90, level: 'average', time: '4h 00m' },
 ];
 
+const INITIAL_STUDENT_NOTIFICATIONS = [
+  {
+    id: 1,
+    title: 'Revisão agendada para hoje',
+    text: 'Sua revisão de Biologia sobre Ecologia vence às 19h.',
+    time: 'Agora',
+    type: 'warning',
+    unread: true,
+    icon: Clock3,
+  },
+  {
+    id: 2,
+    title: 'Tutoria com IA liberada',
+    text: 'Seu tutor já pode montar um plano para o próximo simulado.',
+    time: 'Há 1h',
+    type: 'success',
+    unread: true,
+    icon: CheckCircle2,
+  },
+  {
+    id: 3,
+    title: 'Prazo importante',
+    text: 'As inscrições do ENEM entram na janela de atenção nesta semana.',
+    time: 'Ontem',
+    type: 'danger',
+    unread: false,
+    icon: AlertCircle,
+  },
+];
+
 const diagnosticData = [
   { 
     area: 'Matemática e Suas Tecnologias', 
@@ -81,7 +96,7 @@ const diagnosticData = [
   }
 ];
 
-const initialScheduleData = {
+const scheduleData = {
   days: ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'],
   slots: [
     { time: '07:30 - 09:00', seg: { subject: 'Física', type: 'class', color: 'bg-purple-100 text-purple-700' }, ter: { subject: 'Matemática', type: 'class', color: 'bg-blue-100 text-blue-700' }, qua: { subject: 'História', type: 'class', color: 'bg-yellow-100 text-yellow-700' }, qui: { subject: 'Química', type: 'class', color: 'bg-green-100 text-green-700' }, sex: { subject: 'Biologia', type: 'class', color: 'bg-teal-100 text-teal-700' } },
@@ -91,24 +106,69 @@ const initialScheduleData = {
   ]
 };
 
+const DEFAULT_STUDENT_USER = {
+  name: 'Diogo Medrado',
+  turma: 'Extensivo',
+  xp: 1250,
+  level: 12,
+};
+
+const getHiddenStudentViews = (session) => session?.hiddenStudentViews ?? [];
+
+const sanitizeStudentView = (view, hiddenViews) =>
+  hiddenViews.includes(view) ? 'dashboard' : view;
+
+const buildStudentUser = (session) => ({
+  ...DEFAULT_STUDENT_USER,
+  ...(session?.name ? { name: session.name } : {}),
+});
+
+const getFirstName = (name = '') => {
+  const [firstName] = name.trim().split(/\s+/);
+  return firstName || DEFAULT_STUDENT_USER.name.split(' ')[0];
+};
+
+const getNameInitial = (name = '') => getFirstName(name).charAt(0).toUpperCase();
+
 // ============================================================================
-// 2. CONTEXTO GLOBAL
+// 2. CONTEXTO GLOBAL (Substitui a injeção manual do Hexagonal para UI State)
 // ============================================================================
 
 const AppContext = createContext();
 
-const AppProvider = ({ children }) => {
-  const [currentView, setCurrentView] = useState('dashboard');
+const AppProvider = ({ children, initialView = 'dashboard', session = null }) => {
+  const hiddenViews = getHiddenStudentViews(session);
+  const hiddenViewsKey = hiddenViews.join('|');
+  const [currentView, setCurrentView] = useState(() => sanitizeStudentView(initialView, hiddenViews));
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [user] = useState({ name: 'Diogo Medrado', turma: 'Extensivo', xp: 1250, level: 12 });
+  const [user, setUser] = useState(() => buildStudentUser(session));
+
+  useEffect(() => {
+    setCurrentView(sanitizeStudentView(initialView, hiddenViews));
+  }, [hiddenViewsKey, initialView]);
+
+  useEffect(() => {
+    setUser(buildStudentUser(session));
+  }, [session?.name]);
 
   const navigate = (view) => {
-    setCurrentView(view);
-    setSidebarOpen(false);
+    setCurrentView(sanitizeStudentView(view, hiddenViews));
+    setSidebarOpen(false); // Fecha sidebar no mobile ao navegar
+  };
+
+  const addXp = (amount) => {
+    setUser((prev) => {
+      const nextXp = prev.xp + amount;
+      return {
+        ...prev,
+        xp: nextXp,
+        level: Math.floor(nextXp / 100) + 1,
+      };
+    });
   };
 
   return (
-    <AppContext.Provider value={{ currentView, navigate, sidebarOpen, setSidebarOpen, user }}>
+    <AppContext.Provider value={{ currentView, navigate, sidebarOpen, setSidebarOpen, user, addXp, hiddenViews }}>
       {children}
     </AppContext.Provider>
   );
@@ -116,10 +176,98 @@ const AppProvider = ({ children }) => {
 
 const useApp = () => useContext(AppContext);
 
+const VIEW_TITLES = {
+  dashboard: 'Início',
+  'raio-x': 'Raio-X',
+  diagnostico: 'Diagnóstico',
+  calendario: 'Calendário',
+  cronograma: 'Cronograma',
+  leituras: 'Leituras',
+  pomodoro: 'Pomodoro',
+  revisoes: 'Revisões',
+  simulados: 'Simulados',
+  'aprovacao-fuvest': 'Aprovação FUVEST',
+  'discursiva-ia': 'Discursiva IA',
+  'redacao-ia-fuvest': 'Redação IA FUVEST',
+  'simulador-tri': 'Simulador TRI',
+  tutoria: 'Tutoria com IA',
+  mentoria: 'Mentoria',
+  humor: 'Medidor de Humor',
+  'rede-de-apoio': 'Rede de Apoio',
+};
+
+const IMMERSIVE_VIEWS = new Set([
+  'aprovacao-fuvest',
+  'discursiva-ia',
+  'redacao-ia-fuvest',
+  'simulador-tri',
+  'tutoria',
+  'mentoria',
+  'humor',
+  'rede-de-apoio',
+]);
+
+const NAVIGATION_SECTIONS = [
+  {
+    id: 'essencial',
+    title: 'Estudos',
+    items: [
+      { id: 'dashboard', icon: Home, label: 'Início' },
+      { id: 'raio-x', icon: Search, label: 'Raio-X' },
+      { id: 'diagnostico', icon: Activity, label: 'Diagnóstico' },
+    ],
+  },
+  {
+    id: 'organizacao',
+    title: 'Organização',
+    items: [
+      { id: 'calendario', icon: Calendar, label: 'Calendário' },
+      { id: 'cronograma', icon: Clock, label: 'Cronograma' },
+      { id: 'leituras', icon: BookOpen, label: 'Leituras' },
+      { id: 'pomodoro', icon: Play, label: 'Pomodoro' },
+    ],
+  },
+  {
+    id: 'pratica',
+    title: 'Prática',
+    items: [
+      { id: 'revisoes', icon: RotateCcw, label: 'Revisões' },
+      { id: 'simulados', icon: CheckSquare, label: 'Simulados' },
+    ],
+  },
+  {
+    id: 'estrategia',
+    title: 'Aprovação',
+    items: [
+      { id: 'aprovacao-fuvest', icon: Target, label: 'Aprovação FUVEST' },
+      { id: 'simulador-tri', icon: Sparkles, label: 'Simulador TRI' },
+    ],
+  },
+  {
+    id: 'ia',
+    title: 'IA',
+    items: [
+      { id: 'discursiva-ia', icon: FileText, label: 'Discursiva IA', hiddenWhen: 'discursiva-ia' },
+      { id: 'redacao-ia-fuvest', icon: PenTool, label: 'Redação IA' },
+      { id: 'tutoria', icon: Sparkles, label: 'Tutoria com IA' },
+    ],
+  },
+  {
+    id: 'apoio',
+    title: 'Apoio',
+    items: [
+      { id: 'mentoria', icon: Users, label: 'Mentoria' },
+      { id: 'humor', icon: Heart, label: 'Medidor de Humor' },
+      { id: 'rede-de-apoio', icon: HeartHandshake, label: 'Rede de Apoio' },
+    ],
+  },
+];
+
 // ============================================================================
-// 3. COMPONENTES UI REUTILIZÁVEIS
+// 3. COMPONENTES UI REUTILIZÁVEIS (Substitui o components.css)
 // ============================================================================
 
+// Substitui o painel com Glassmorphism
 const Card = ({ children, className = '' }) => (
   <div className={`bg-white/80 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-2xl p-6 ${className}`}>
     {children}
@@ -144,12 +292,11 @@ const DashboardView = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      
+      {/* Banner Principal (Substitui .dashboard-banner) */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-8 text-white shadow-lg">
         <div className="relative z-10 max-w-lg">
-          <span className="inline-block px-3 py-1 mb-4 text-xs font-bold tracking-wider text-blue-200 uppercase bg-blue-500/20 rounded-full backdrop-blur-md border border-blue-400/20">
-            Sprint 20.5
-          </span>
-          <h2 className="text-3xl font-bold mb-2">Bom dia, {user.name.split(' ')[0]}!</h2>
+          <h2 className="text-3xl font-bold mb-2">Bom dia, {getFirstName(user.name)}!</h2>
           <p className="text-blue-100/80 mb-6 line-clamp-2">
             Faltam 206 dias para o ENEM. Seu foco hoje é Matemática Básica e revisão de Biologia.
           </p>
@@ -166,10 +313,12 @@ const DashboardView = () => {
           </div>
         </div>
         
+        {/* Elementos visuais decorativos convertidos para Tailwind */}
         <div className="absolute -top-24 -right-24 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl mix-blend-screen pointer-events-none" />
         <div className="absolute -bottom-24 right-12 w-64 h-64 bg-orange-500/20 rounded-full blur-3xl mix-blend-screen pointer-events-none" />
       </div>
 
+      {/* Grid de KPIs (Substitui .kpi-grid) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Horas Estudadas', value: mockDashboard.kpis.totalHours, icon: Clock, color: 'text-blue-500', bg: 'bg-blue-50' },
@@ -189,6 +338,7 @@ const DashboardView = () => {
         ))}
       </div>
 
+      {/* Progresso dos Cursos (Substitui .course-progress-panel) */}
       <Card>
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-lg font-bold text-slate-800">Seu Progresso</h3>
@@ -233,6 +383,7 @@ const TimelineView = () => {
             
             return (
               <div key={idx} className="relative pl-8">
+                {/* Ponto na timeline */}
                 <div className={`absolute -left-[9px] top-1 w-4 h-4 rounded-full border-2 border-white ${
                   isPast ? 'bg-slate-400' : isCurrent ? 'bg-orange-500 ring-4 ring-orange-500/20' : 'bg-blue-500'
                 }`} />
@@ -251,101 +402,6 @@ const TimelineView = () => {
               </div>
             );
           })}
-        </div>
-      </Card>
-    </div>
-  );
-};
-
-const RaioXView = () => {
-  const [activeExam, setActiveExam] = useState('enem');
-  const currentData = raioXData[activeExam];
-
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">Raio-X de Incidência</h2>
-          <p className="text-slate-500 mt-1">O que mais cai em cada vestibular com base em Big Data.</p>
-        </div>
-        
-        <div className="flex bg-slate-100 p-1 rounded-xl w-full md:w-auto overflow-x-auto">
-          {Object.values(raioXData).map(exam => (
-            <button
-              key={exam.id}
-              onClick={() => setActiveExam(exam.id)}
-              className={`flex-1 md:flex-none px-6 py-2 text-sm font-bold rounded-lg transition-all whitespace-nowrap ${
-                activeExam === exam.id 
-                  ? 'bg-white text-blue-600 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              {exam.title}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <Card className="bg-gradient-to-br from-blue-50 to-indigo-50/30 border-blue-100">
-        <div className="flex items-start gap-4">
-          <div className="p-3 bg-blue-100 text-blue-600 rounded-xl">
-            <Search size={24} />
-          </div>
-          <div>
-            <h3 className="font-bold text-slate-800 text-lg">Fonte dos Dados</h3>
-            <p className="text-slate-600 text-sm mt-1">{currentData.source}</p>
-          </div>
-        </div>
-      </Card>
-
-      <Card className="overflow-hidden p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500 font-bold">
-                <th className="p-4 w-1/4">Disciplina</th>
-                <th className="p-4 w-1/4"><span className="text-red-500 px-2 py-1 bg-red-50 rounded-full">Alta (Top 30%)</span></th>
-                <th className="p-4 w-1/4"><span className="text-orange-500 px-2 py-1 bg-orange-50 rounded-full">Média</span></th>
-                <th className="p-4 w-1/4"><span className="text-teal-500 px-2 py-1 bg-teal-50 rounded-full">Regular</span></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {currentData.subjects.map((subject, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="p-4 font-bold text-slate-800 align-top">
-                    {subject.name}
-                  </td>
-                  <td className="p-4 align-top">
-                    <div className="flex flex-wrap gap-2">
-                      {subject.high.split(',').map((topic, i) => (
-                        <span key={i} className="inline-block px-2 py-1 bg-white border border-red-200 text-slate-700 text-sm rounded-md shadow-sm">
-                          {topic.trim()}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="p-4 align-top">
-                    <div className="flex flex-wrap gap-2">
-                      {subject.med.split(',').map((topic, i) => (
-                        <span key={i} className="inline-block px-2 py-1 bg-white border border-orange-200 text-slate-700 text-sm rounded-md shadow-sm">
-                          {topic.trim()}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="p-4 align-top">
-                    <div className="flex flex-wrap gap-2">
-                      {subject.reg.split(',').map((topic, i) => (
-                        <span key={i} className="inline-block px-2 py-1 bg-white border border-teal-200 text-slate-700 text-sm rounded-md shadow-sm">
-                          {topic.trim()}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </Card>
     </div>
@@ -504,6 +560,7 @@ const SimuladosView = () => {
 };
 
 const DiagnosticoView = () => {
+  // Estado para armazenar o nível (1 a 5) de cada tópico
   const [levels, setLevels] = useState({});
 
   const handleLevelSelect = (topic, level) => {
@@ -584,126 +641,39 @@ const DiagnosticoView = () => {
   );
 };
 
-// ============================================================================
-// NOVO COMPONENTE: EditableScheduleView
-// ============================================================================
-export const EditableScheduleView = () => {
-  const [schedule, setSchedule] = useState(initialScheduleData);
-  
-  // Controle dos modais e contexto de edição
-  const [modalType, setModalType] = useState(null); // 'cell', 'time', ou null
-  const [editContext, setEditContext] = useState({ rowIndex: null, dayKey: null });
-  
-  // Estados temporários para os inputs do modal
-  const [tempData, setTempData] = useState({ subject: '', color: '', time: '' });
-  
-  // Estado para mobile view
-  const [activeMobileDay, setActiveMobileDay] = useState('ter');
-
-  const daysKeys = [
-    { key: 'seg', label: 'Segunda' },
-    { key: 'ter', label: 'Terça' },
-    { key: 'qua', label: 'Quarta' },
-    { key: 'qui', label: 'Quinta' },
-    { key: 'sex', label: 'Sexta' }
-  ];
-
-  const colorOptions = [
-    { bg: 'bg-purple-100', text: 'text-purple-700' },
-    { bg: 'bg-blue-100', text: 'text-blue-700' },
-    { bg: 'bg-yellow-100', text: 'text-yellow-700' },
-    { bg: 'bg-green-100', text: 'text-green-700' },
-    { bg: 'bg-teal-100', text: 'text-teal-700' },
-    { bg: 'bg-orange-100', text: 'text-orange-700' },
-    { bg: 'bg-pink-100', text: 'text-pink-700' },
-    { bg: 'bg-slate-100', text: 'text-slate-500' },
-    { bg: 'bg-slate-800', text: 'text-white' }
-  ];
-
-  // Abertura do Modal de Célula (Matéria/Cor)
-  const openCellEdit = (rowIndex, dayKey) => {
-    const cell = schedule.slots[rowIndex][dayKey];
-    setTempData({ subject: cell.subject, color: cell.color, time: '' });
-    setEditContext({ rowIndex, dayKey });
-    setModalType('cell');
-  };
-
-  // Abertura do Modal de Horário
-  const openTimeEdit = (rowIndex) => {
-    const slot = schedule.slots[rowIndex];
-    setTempData({ time: slot.time, subject: '', color: '' });
-    setEditContext({ rowIndex, dayKey: null });
-    setModalType('time');
-  };
-
-  const closeModal = () => setModalType(null);
-
-  // Salvar alterações
-  const saveEdit = () => {
-    const newSchedule = { ...schedule };
-    
-    if (modalType === 'cell') {
-      newSchedule.slots[editContext.rowIndex][editContext.dayKey] = {
-        ...newSchedule.slots[editContext.rowIndex][editContext.dayKey],
-        subject: tempData.subject,
-        color: tempData.color
-      };
-    } else if (modalType === 'time') {
-      newSchedule.slots[editContext.rowIndex].time = tempData.time;
-    }
-    
-    setSchedule(newSchedule);
-    closeModal();
-  };
-
+const CronogramaView = () => {
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex justify-between items-end mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">Construtor de Cronograma</h2>
-          <p className="text-slate-500 mt-1">Clique em qualquer bloco ou horário para editar a sua rotina.</p>
+          <h2 className="text-2xl font-bold text-slate-800">Cronograma Semanal</h2>
+          <p className="text-slate-500 mt-1">Sua rotina de estudos presencial e autônoma.</p>
         </div>
       </div>
 
-      {/* Tabela Interativa (Desktop) */}
       <Card className="p-0 overflow-hidden hidden md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse table-fixed min-w-[800px]">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="p-4 w-32 text-xs uppercase tracking-wider text-slate-400 font-bold text-center">Horário</th>
-                {schedule.days.map(day => (
-                  <th key={day} className="p-4 text-sm uppercase tracking-wider text-slate-700 font-bold text-center border-l border-slate-200">
-                    {day}
-                  </th>
+                <th className="p-4 w-32 text-xs uppercase tracking-wider text-slate-400 font-bold">Horário</th>
+                {scheduleData.days.map(day => (
+                  <th key={day} className="p-4 text-sm uppercase tracking-wider text-slate-700 font-bold text-center border-l border-slate-200">{day}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {schedule.slots.map((slot, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                  <td 
-                    className="p-4 text-xs font-bold text-slate-500 align-middle text-center cursor-pointer hover:bg-slate-100 transition-colors relative group"
-                    onClick={() => openTimeEdit(idx)}
-                  >
-                    <span className="group-hover:opacity-0 transition-opacity">{slot.time}</span>
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-blue-500">
-                      <Edit3 size={16} />
-                    </div>
+              {scheduleData.slots.map((slot, idx) => (
+                <tr key={idx} className="hover:bg-slate-50/50">
+                  <td className="p-4 text-xs font-bold text-slate-500 align-middle">
+                    {slot.time}
                   </td>
-                  
-                  {daysKeys.map(day => {
-                    const block = slot[day.key];
+                  {['seg', 'ter', 'qua', 'qui', 'sex'].map(dayKey => {
+                    const block = slot[dayKey];
                     return (
-                      <td key={day.key} className="p-2 border-l border-slate-100 align-middle h-full">
-                        <div 
-                          onClick={() => openCellEdit(idx, day.key)}
-                          className={`w-full h-full min-h-[56px] p-3 rounded-lg text-center flex items-center justify-center font-bold text-sm cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-blue-400 transition-all group relative ${block.color}`}
-                        >
+                      <td key={dayKey} className="p-2 border-l border-slate-100 align-middle h-full">
+                        <div className={`w-full h-full p-3 rounded-lg text-center flex items-center justify-center font-bold text-sm ${block.color}`}>
                           {block.subject}
-                          <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-white/30 rounded backdrop-blur-sm">
-                            <Edit2 size={12} />
-                          </div>
                         </div>
                       </td>
                     );
@@ -715,134 +685,35 @@ export const EditableScheduleView = () => {
         </div>
       </Card>
 
-      {/* Visualização Lista Interativa (Mobile) */}
+      {/* Visualização Mobile do Cronograma (Apenas o dia atual mockado) */}
       <div className="md:hidden space-y-4">
-        {/* Seletor de Dia Mobile */}
-        <div className="flex bg-slate-100 p-1 rounded-xl overflow-x-auto gap-1">
-          {daysKeys.map(day => (
-            <button
-              key={day.key}
-              onClick={() => setActiveMobileDay(day.key)}
-              className={`flex-1 px-4 py-2 text-sm font-bold rounded-lg transition-all whitespace-nowrap ${
-                activeMobileDay === day.key 
-                  ? 'bg-white text-blue-600 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              {day.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center justify-between px-2 mt-4">
-          <h3 className="font-bold text-slate-800">{daysKeys.find(d => d.key === activeMobileDay)?.label}</h3>
-          <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md">Toque para editar</span>
+        <div className="flex items-center justify-between px-2">
+          <h3 className="font-bold text-slate-800">Terça-feira (Hoje)</h3>
+          <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md">Semana 12</span>
         </div>
         
-        <div className="space-y-3 pb-4">
-          {schedule.slots.map((slot, idx) => {
-            const block = slot[activeMobileDay];
+        <div className="space-y-3">
+          {scheduleData.slots.map((slot, idx) => {
+            const block = slot['ter']; // Forçando "Terça" para o mobile view
             return (
-              <div key={idx} className="flex gap-2">
-                <button 
-                  onClick={() => openTimeEdit(idx)}
-                  className="w-24 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-xs font-bold text-slate-500 active:scale-95 transition-transform"
-                >
-                  {slot.time.split(' - ')[0]}<br/>{slot.time.split(' - ')[1]}
-                </button>
-                <button 
-                  onClick={() => openCellEdit(idx, activeMobileDay)}
-                  className={`flex-1 p-4 rounded-xl font-bold text-sm text-center relative flex items-center justify-between active:scale-95 transition-transform ${block.color}`}
-                >
-                  <span className="flex-1">{block.subject}</span>
-                  <Edit2 size={16} className="opacity-50" />
-                </button>
-              </div>
+              <Card key={idx} className="p-4 flex items-center gap-4 border-l-4 border-l-blue-500">
+                <div className="text-sm font-bold text-slate-500 w-24">
+                  {slot.time.split(' - ')[0]}
+                </div>
+                <div className={`flex-1 p-3 rounded-lg font-bold text-sm text-center ${block.color}`}>
+                  {block.subject}
+                </div>
+              </Card>
             );
           })}
         </div>
       </div>
-
-      {/* Modal de Edição (Cell ou Time) */}
-      {modalType && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={closeModal}></div>
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
-            
-            <div className="flex justify-between items-center mb-5">
-              <h3 className="text-lg font-bold text-slate-800">
-                {modalType === 'cell' ? 'Editar Atividade' : 'Editar Horário'}
-              </h3>
-              <button onClick={closeModal} className="text-slate-400 hover:bg-slate-100 p-1 rounded-full transition-colors">
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="space-y-5">
-              {modalType === 'cell' && (
-                <>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Matéria / Descrição</label>
-                    <input 
-                      type="text" 
-                      value={tempData.subject}
-                      onChange={(e) => setTempData({...tempData, subject: e.target.value})}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors font-semibold text-slate-800"
-                      placeholder="Ex: Matemática Básica"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Cor do Bloco</label>
-                    <div className="flex flex-wrap gap-3">
-                      {colorOptions.map((c, i) => {
-                        const classString = `${c.bg} ${c.text}`;
-                        const isSelected = tempData.color === classString;
-                        return (
-                          <button
-                            key={i}
-                            onClick={() => setTempData({...tempData, color: classString})}
-                            className={`w-10 h-10 rounded-full ${c.bg} ${isSelected ? 'ring-2 ring-offset-2 ring-blue-500 scale-110 shadow-sm' : 'hover:scale-105 border border-black/5'} transition-all`}
-                            aria-label={`Cor ${i}`}
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {modalType === 'time' && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Intervalo (Ex: 07:30 - 09:00)</label>
-                  <input 
-                    type="text" 
-                    value={tempData.time}
-                    onChange={(e) => setTempData({...tempData, time: e.target.value})}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors font-semibold text-slate-800"
-                    placeholder="00:00 - 00:00"
-                  />
-                </div>
-              )}
-
-              <div className="pt-2">
-                <button 
-                  onClick={saveEdit}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md transition-colors"
-                >
-                  Salvar Alterações
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
-
 // ============================================================================
-// 5. SHELL DE NAVEGAÇÃO
+// 5. SHELL DE NAVEGAÇÃO (Sidebar, Header, Layout)
 // ============================================================================
 
 const SidebarItem = ({ icon: Icon, label, id, disabled }) => {
@@ -864,30 +735,130 @@ const SidebarItem = ({ icon: Icon, label, id, disabled }) => {
   );
 };
 
-const Navigation = () => (
-  <div className="space-y-1">
-    <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-6">Estudos</p>
-    <SidebarItem id="dashboard" icon={Home} label="Início" />
-    <SidebarItem id="raio-x" icon={Search} label="Raio-X Enem" />
-    <SidebarItem id="diagnostico" icon={Activity} label="Diagnóstico" />
-    
-    <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-8">Organização</p>
-    <SidebarItem id="calendario" icon={Calendar} label="Calendário" />
-    <SidebarItem id="cronograma" icon={Clock} label="Cronograma" />
-    <SidebarItem id="leituras" icon={BookOpen} label="Leituras" />
-    
-    <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-8">Prática</p>
-    <SidebarItem id="revisoes" icon={RotateCcw} label="Revisões" />
-    <SidebarItem id="simulados" icon={CheckSquare} label="Simulados" />
-  </div>
-);
+const Navigation = () => {
+  const { hiddenViews } = useApp();
 
-const Layout = () => {
-  const { currentView, sidebarOpen, setSidebarOpen, user } = useApp();
+  return (
+    <div className="flex-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
+      <div className="space-y-1 pb-6">
+        {NAVIGATION_SECTIONS.map((section) => {
+          const visibleItems = section.items.filter((item) => !item.hiddenWhen || !hiddenViews.includes(item.hiddenWhen));
+
+          if (!visibleItems.length) {
+            return null;
+          }
+
+          return (
+            <section key={section.id} className="pt-6 first:pt-6">
+              <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                {section.title}
+              </p>
+              {visibleItems.map((item) => (
+                <SidebarItem
+                  key={item.id}
+                  id={item.id}
+                  icon={item.icon}
+                  label={item.label}
+                  disabled={item.disabled}
+                />
+              ))}
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const Layout = ({ onLogout, externalViews = {} }) => {
+  const { currentView, navigate, sidebarOpen, setSidebarOpen, user, addXp, hiddenViews } = useApp();
+  const {
+    ReadingsView,
+    RevisionsView,
+    SimuladosView,
+    FuvestApprovalView,
+    DiscursiveAIView,
+    EssayReviewView,
+    TriSimulatorView,
+    TutoriaView,
+    MentorshipView,
+    MoodTrackerView,
+    SupportNetworkView,
+  } = externalViews;
+  const isImmersiveView = IMMERSIVE_VIEWS.has(currentView);
+  const [notifications, setNotifications] = useState(INITIAL_STUDENT_NOTIFICATIONS);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [notifAnimPhase, setNotifAnimPhase] = useState('idle'); // 'idle' | 'striking' | 'done'
+  const [struckIds, setStruckIds] = useState(new Set());
+  const notificationsDropdownRef = useRef(null);
+  const profileDropdownRef = useRef(null);
+  const animTimers = useRef([]);
+  const unreadNotificationsCount = notifications.filter((notification) => notification.unread).length;
+
+  const markNotificationAsRead = (notificationId) => {
+    setNotifications((previousNotifications) =>
+      previousNotifications.map((notification) =>
+        notification.id === notificationId ? { ...notification, unread: false } : notification
+      )
+    );
+  };
+
+  const markAllNotificationsAsRead = () => {
+    if (notifAnimPhase !== 'idle') return;
+    const unread = notifications.filter((n) => n.unread);
+    if (!unread.length) return;
+
+    animTimers.current.forEach(clearTimeout);
+    animTimers.current = [];
+    setNotifAnimPhase('striking');
+
+    unread.forEach((notif, idx) => {
+      const t = setTimeout(() => {
+        setStruckIds((prev) => new Set([...prev, notif.id]));
+      }, idx * 280);
+      animTimers.current.push(t);
+    });
+
+    const doneDelay = unread.length * 280 + 400;
+    animTimers.current.push(
+      setTimeout(() => {
+        setNotifAnimPhase('done');
+        setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+      }, doneDelay)
+    );
+    animTimers.current.push(
+      setTimeout(() => {
+        setNotifAnimPhase('idle');
+        setStruckIds(new Set());
+        setShowNotifications(false);
+      }, doneDelay + 2200)
+    );
+  };
+
+  useEffect(() => () => animTimers.current.forEach(clearTimeout), []);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (notificationsDropdownRef.current && !notificationsDropdownRef.current.contains(event.target)) {
+        setShowNotifications(false);
+      }
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target)) {
+        setShowProfileMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-800 font-sans overflow-hidden">
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 p-4 transform transition-transform duration-300 ease-in-out md:translate-x-0 md:static ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      
+      {/* Sidebar Desktop */}
+      <aside className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col overflow-hidden bg-white border-r border-slate-200 p-4 transform transition-transform duration-300 ease-in-out md:translate-x-0 md:static ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex items-center gap-3 px-2 mb-8 mt-2">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md">
             P
@@ -900,6 +871,7 @@ const Layout = () => {
         <Navigation />
       </aside>
 
+      {/* Overlay Mobile */}
       {sidebarOpen && (
         <div 
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 md:hidden"
@@ -907,72 +879,257 @@ const Layout = () => {
         />
       )}
 
+      {/* Área Principal */}
       <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+        
+        {/* Top Header */}
         <header className="h-16 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 md:px-8 z-30">
           <div className="flex items-center gap-4">
             <button className="md:hidden text-slate-500" onClick={() => setSidebarOpen(true)}>
               <Menu size={24} />
             </button>
             <h1 className="font-bold text-lg text-slate-800 capitalize hidden sm:block">
-              {currentView.replace('-', ' ')}
+              {VIEW_TITLES[currentView] || currentView.replace('-', ' ')}
             </h1>
           </div>
           
           <div className="flex items-center gap-4">
+            {/* Gamification Badge (Substitui o .xp-badge) */}
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-full border border-slate-200">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Lvl {user.level}</span>
               <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                <div className="w-2/3 h-full bg-orange-500 rounded-full" />
+                <div
+                  className="h-full bg-orange-500 rounded-full transition-all duration-500"
+                  style={{ width: `${user.xp % 100}%` }}
+                />
               </div>
               <span className="text-xs font-bold text-slate-800">{user.xp} XP</span>
             </div>
 
-            <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-500 relative">
-              <Bell size={20} />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
-            </button>
+            <div className="relative" ref={notificationsDropdownRef}>
+              <button
+                onClick={() => {
+                  setShowNotifications((prev) => {
+                    if (!prev) {
+                      animTimers.current.forEach(clearTimeout);
+                      animTimers.current = [];
+                      setNotifAnimPhase('idle');
+                      setStruckIds(new Set());
+                    }
+                    return !prev;
+                  });
+                  setShowProfileMenu(false);
+                }}
+                className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors relative ${
+                  showNotifications ? 'bg-blue-100 text-blue-600' : 'hover:bg-slate-100 text-slate-500'
+                }`}
+              >
+                <Bell size={20} />
+                {unreadNotificationsCount > 0 && (
+                  <span className="absolute top-2 right-2 min-w-2 h-2 px-1 rounded-full bg-red-500 border-2 border-white" />
+                )}
+              </button>
+
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 shadow-xl rounded-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-3">
+                    <div>
+                      <h4 className="font-bold text-slate-800">Notificações</h4>
+                      <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mt-1">
+                        {unreadNotificationsCount > 0 ? `${unreadNotificationsCount} nova(s)` : 'Tudo em dia'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={markAllNotificationsAsRead}
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-700 disabled:text-slate-300"
+                      disabled={unreadNotificationsCount === 0 || notifAnimPhase !== 'idle'}
+                    >
+                      {notifAnimPhase === 'striking' ? 'Marcando…' : 'Marcar como lidas'}
+                    </button>
+                  </div>
+                  <div className="max-h-[320px] overflow-y-auto divide-y divide-slate-100">
+                    {notifAnimPhase === 'done' ? (
+                      <div className="flex flex-col items-center justify-center py-10 px-4 animate-in fade-in zoom-in-95 duration-500">
+                        <CheckCircle2 size={52} className="text-green-500" />
+                        <p className="mt-3 font-bold text-slate-800">Tudo limpo!</p>
+                        <p className="text-sm text-slate-500 mt-1 text-center">Nenhuma notificação pendente.</p>
+                      </div>
+                    ) : (
+                      notifications.map((notification) => {
+                        const isStruck = struckIds.has(notification.id);
+                        return (
+                          <button
+                            key={notification.id}
+                            onClick={() => markNotificationAsRead(notification.id)}
+                            className={`w-full p-4 text-left transition-all flex gap-3 ${
+                              isStruck
+                                ? 'opacity-40'
+                                : notification.unread
+                                  ? 'bg-blue-50/40 hover:bg-blue-50'
+                                  : 'hover:bg-slate-50'
+                            }`}
+                          >
+                            <div
+                              className={`p-2 rounded-full h-fit flex-shrink-0 ${
+                                notification.type === 'danger'
+                                  ? 'bg-red-50 text-red-500'
+                                  : notification.type === 'warning'
+                                    ? 'bg-orange-50 text-orange-500'
+                                    : 'bg-teal-50 text-teal-500'
+                              }`}
+                            >
+                              <notification.icon size={16} />
+                            </div>
+                            <div className={`min-w-0 transition-all ${isStruck ? 'line-through decoration-slate-400' : ''}`}>
+                              <div className="flex items-start justify-between gap-3">
+                                <p className="font-bold text-sm text-slate-800">{notification.title}</p>
+                                {notification.unread && !isStruck && (
+                                  <span className="mt-1 w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{notification.text}</p>
+                              <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase">{notification.time}</p>
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold border-2 border-white shadow-sm">
-              {user.name.charAt(0)}
+            <div className="relative" ref={profileDropdownRef}>
+              <button
+                onClick={() => {
+                  setShowProfileMenu((prev) => !prev);
+                  setShowNotifications(false);
+                }}
+                className="flex items-center gap-3 pl-4 border-l border-slate-200 hover:opacity-80 transition-opacity text-left"
+              >
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold border-2 border-white shadow-sm">
+                  {getNameInitial(user.name)}
+                </div>
+              </button>
+
+              {showProfileMenu && (
+                <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 shadow-xl rounded-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="p-2 flex flex-col">
+                    <button
+                      onClick={() => {
+                        setShowProfileMenu(false);
+                        setShowSettingsModal(true);
+                      }}
+                      className="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-left"
+                    >
+                      <Settings size={16} /> Configurações
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowProfileMenu(false);
+                        setShowHelpModal(true);
+                      }}
+                      className="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-left"
+                    >
+                      <HelpCircle size={16} /> Ajuda
+                    </button>
+                    <div className="h-px bg-slate-100 my-1"></div>
+                    <button
+                      onClick={() => {
+                        setShowProfileMenu(false);
+                        if (typeof onLogout === 'function') {
+                          onLogout();
+                        }
+                      }}
+                      className="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 rounded-lg transition-colors text-left"
+                    >
+                      <LogOut size={16} /> Sair
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8">
-          {currentView === 'dashboard' && <DashboardView />}
-          {currentView === 'calendario' && <TimelineView />}
-          {currentView === 'raio-x' && <RaioXView />}
-          {currentView === 'diagnostico' && <DiagnosticoView />}
-          {currentView === 'cronograma' && <EditableScheduleView />}
-          {currentView === 'leituras' && <LeiturasView />}
-          {currentView === 'revisoes' && <RevisoesView />}
-          {currentView === 'simulados' && <SimuladosView />}
+        {/* Área de Conteúdo Rolável */}
+        <div className={`flex-1 overflow-y-auto ${isImmersiveView ? 'bg-slate-50' : 'p-4 md:p-8 pb-24 md:pb-8'}`}>
+          <Suspense
+            fallback={
+              <div className="flex min-h-[40vh] items-center justify-center text-sm font-semibold text-slate-500">
+                Carregando módulo...
+              </div>
+            }
+          >
+            {currentView === 'dashboard' && <DashboardView />}
+            {currentView === 'calendario' && <CalendarManagerView />}
+            {currentView === 'raio-x' && <RaioXSection />}
+            {currentView === 'diagnostico' && <DiagnosticoView />}
+            {currentView === 'cronograma' && <EditableScheduleView />}
+            {currentView === 'leituras' && ReadingsView && <ReadingsView />}
+            {currentView === 'revisoes' && RevisionsView && <RevisionsView />}
+            {currentView === 'simulados' && SimuladosView && <SimuladosView />}
+            {currentView === 'pomodoro' && <PomodoroView addXp={addXp} />}
+            {currentView === 'aprovacao-fuvest' && FuvestApprovalView && <FuvestApprovalView />}
+            {currentView === 'discursiva-ia' && !hiddenViews.includes('discursiva-ia') && DiscursiveAIView && <DiscursiveAIView />}
+            {currentView === 'redacao-ia-fuvest' && EssayReviewView && <EssayReviewView />}
+            {currentView === 'simulador-tri' && TriSimulatorView && <TriSimulatorView />}
+            {currentView === 'tutoria' && TutoriaView && <TutoriaView user={user} />}
+            {currentView === 'mentoria' && MentorshipView && <MentoriaView><MentorshipView /></MentoriaView>}
+            {currentView === 'humor' && MoodTrackerView && <MoodTrackerView />}
+            {currentView === 'rede-de-apoio' && SupportNetworkView && <SupportNetworkView />}
+          </Suspense>
         </div>
 
-        <button className="fixed bottom-20 md:bottom-8 right-4 md:right-8 bg-slate-800 text-white p-4 rounded-2xl shadow-xl hover:scale-105 transition-transform flex items-center gap-3 group z-40">
-          <Play size={20} className="text-orange-400 group-hover:text-orange-300" />
-          <span className="font-bold font-mono tracking-widest text-lg">25:00</span>
-        </button>
+        {/* FAB de Pomodoro Mockado */}
+        {!isImmersiveView && (
+          <button
+            onClick={() => navigate('pomodoro')}
+            className="fixed bottom-20 md:bottom-8 right-4 md:right-8 bg-slate-800 text-white p-4 rounded-2xl shadow-xl hover:scale-105 transition-transform flex items-center gap-3 group z-40"
+          >
+            <Play size={20} className="text-orange-400 group-hover:text-orange-300" />
+            <span className="font-bold font-mono tracking-widest text-lg">25:00</span>
+          </button>
+        )}
+
+        <AccountSettingsModal
+          open={showSettingsModal}
+          onClose={() => setShowSettingsModal(false)}
+          profile="student"
+          userName={getFirstName(user.name)}
+        />
+        <AccountHelpModal
+          open={showHelpModal}
+          onClose={() => setShowHelpModal(false)}
+          profile="student"
+          userName={getFirstName(user.name)}
+        />
+
       </main>
 
-      <nav className="md:hidden fixed bottom-0 w-full bg-white border-t border-slate-200 flex justify-around p-2 pb-safe z-50">
-        {[
-          { id: 'dashboard', icon: Home, label: 'Início' },
-          { id: 'cronograma', icon: Clock, label: 'Rotina' },
-          { id: 'revisoes', icon: RotateCcw, label: 'Revisões' },
-        ].map((item) => (
-          <button
-            key={item.id}
-            onClick={() => useApp().navigate(item.id)}
-            className={`flex flex-col items-center p-2 rounded-lg min-w-[64px] ${
-              currentView === item.id ? 'text-blue-600' : 'text-slate-400'
-            }`}
-          >
-            <item.icon size={24} className="mb-1" />
-            <span className="text-[10px] font-bold">{item.label}</span>
-          </button>
-        ))}
-      </nav>
+      {/* Bottom Nav Mobile (Aparece apenas em telas pequenas) */}
+      {!isImmersiveView && (
+        <nav className="md:hidden fixed bottom-0 w-full bg-white border-t border-slate-200 flex justify-around p-2 pb-safe z-50">
+          {[
+            { id: 'dashboard', icon: Home, label: 'Início' },
+            { id: 'calendario', icon: Calendar, label: 'Calendário' },
+            { id: 'revisoes', icon: RotateCcw, label: 'Revisões' },
+            { id: 'tutoria', icon: Sparkles, label: 'Tutoria IA' },
+          ].map((item) => (
+            <button
+              key={item.id}
+              onClick={() => navigate(item.id)}
+              className={`flex flex-col items-center p-2 rounded-lg min-w-[64px] ${
+                currentView === item.id ? 'text-blue-600' : 'text-slate-400'
+              }`}
+            >
+              <item.icon size={24} className="mb-1" />
+              <span className="text-[10px] font-bold">{item.label}</span>
+            </button>
+          ))}
+        </nav>
+      )}
+
     </div>
   );
 };
@@ -981,10 +1138,10 @@ const Layout = () => {
 // 6. COMPONENTE RAIZ
 // ============================================================================
 
-export default function App() {
+export default function StudentShell({ initialView = 'dashboard', onLogout, session = null, externalViews = {} }) {
   return (
-    <AppProvider>
-      <Layout />
+    <AppProvider initialView={initialView} session={session}>
+      <Layout onLogout={onLogout} externalViews={externalViews} />
     </AppProvider>
   );
 }

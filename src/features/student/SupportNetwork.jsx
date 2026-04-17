@@ -99,7 +99,7 @@ const MOCK_RESOURCES = [
   }
 ];
 
-export default function App() {
+export default function SupportNetwork() {
   const [activeFilter, setActiveFilter] = useState('Todos');
   const [copiedId, setCopiedId] = useState(null);
   const [isEmergencyModalOpen, setIsEmergencyModalOpen] = useState(false);

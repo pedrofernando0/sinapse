@@ -68,7 +68,7 @@ Contas de demonstração para testar o produto:
 | Nova view no shell do professor | `docs/ARCHITECTURE.md` + `docs/SPRINTS.md` |
 | Novo componente em `src/components/` | `docs/ARCHITECTURE.md` (seção componentes compartilhados) |
 | Novo arquivo em `src/lib/` | `docs/ARCHITECTURE.md` (tabela da camada src) |
-| Nova rota em `src/App.jsx` | `docs/ARCHITECTURE.md` (fluxo de autenticação) + `README.md` |
+| Nova rota em `src/routes/AppRoutes.jsx` | `docs/ARCHITECTURE.md` (fluxo de autenticação) + `README.md` |
 | Nova dependência npm | `docs/STACK.md` |
 | Nova convenção de código | `AGENTS.md` |
 | Mudança estrutural maior | `README.md` |
@@ -81,12 +81,13 @@ Contas de demonstração para testar o produto:
 - Mantenha o fluxo login-first intacto.
 - Features do aluno vão no shell do aluno; features do professor no shell do professor.
 - Não deixe features acessíveis apenas por URL direta — integre ao shell.
-- `src/` é para bootstrapping, routing e wrappers. Lógica de produto fica em `01-app-core/`.
+- `src/` é para bootstrapping, routing e feature slices. Não reintroduza dependências
+  de runtime em `legacy/`.
 
 **Código:**
 - Somente Tailwind CSS — zero CSS modules, styled-components ou @apply.
 - Ícones somente de `lucide-react` — verifique o nome em `lucide.dev`.
-- Export nomeado em `src/components/`, export default em `01-app-core/`.
+- Export nomeado em `src/components/`. Módulos de feature usam `export default`.
 - Zero `console.log` commitado.
 
 **Commits** (Conventional Commits em português):

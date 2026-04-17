@@ -29,7 +29,7 @@ const Card = ({ children, className = '' }) => (
   </div>
 );
 
-export default function AiTutoringHub({ user }) {
+export default function Tutoria({ user }) {
   const student = {
     ...DEFAULT_TUTOR_USER,
     ...user,

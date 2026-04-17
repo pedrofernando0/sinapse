@@ -449,7 +449,7 @@ const AvaliacaoView = ({ onComplete }) => (
 // 4. O COMPONENTE PRINCIPAL (HUB)
 // ============================================================================
 
-export default function StrategicStudyHub() {
+export default function FuvestApproval() {
   const [activeSubject, setActiveSubject] = useState(fuvestData[0].subject);
   const [activeTopic, setActiveTopic] = useState(null); 
   const [studiedTopics, setStudiedTopics] = useState({}); 
