@@ -1,87 +1,139 @@
-# Contributing
+# Contributing — Sinapse
 
-This repository is a prototype that is being prepared for public or team-facing
-GitHub use. Keep changes focused, reviewable, and aligned with the existing
-product flow.
+Guia para contribuições humanas ao repositório. Se você é um agente de IA, leia
+[`AGENTS.md`](AGENTS.md) antes deste documento.
 
-## Before you start
+---
 
-Read the following files before making structural changes:
+## Antes de começar
 
-- [`README.md`](README.md)
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+Leia os documentos abaixo na ordem indicada:
 
-These documents explain how the repository is split between product prototypes
-and integration code.
+| Ordem | Arquivo | Por que ler |
+|-------|---------|------------|
+| 1 | [`CLAUDE.md`](CLAUDE.md) | Contexto rápido do projeto, comandos, padrões |
+| 2 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Como o sistema está organizado |
+| 3 | [`docs/SPRINTS.md`](docs/SPRINTS.md) | O que está sendo trabalhado agora |
+| 4 | [`AGENTS.md`](AGENTS.md) | Paradigmas técnicos de intervenção (vale para humanos também) |
 
-## Development workflow
+---
 
-Use the following workflow for changes.
+## Setup de desenvolvimento
 
-1. Install dependencies:
+```bash
+npm install      # instala dependências
+npm run dev      # inicia dev server em http://localhost:5173
+npm run build    # valida o build de produção
+npm run preview  # preview local do build
+```
 
+Contas de demonstração para testar o produto:
+
+| Usuário | Senha | Perfil |
+|---------|-------|--------|
+| valentina | valentina | Aluno |
+| pedro | pedro | Aluno |
+| qualquer nome | qualquer senha | Professor |
+
+---
+
+## Workflow de contribuição
+
+1. **Crie uma branch** a partir de `main`:
    ```bash
-   npm install
+   git checkout -b feat/nome-da-feature
    ```
 
-2. Start the development server:
+2. **Classifique a mudança** usando a taxonomia em `AGENTS.md § 1. Taxonomia de intervenções`
+   antes de começar a escrever código.
 
+3. **Implemente** seguindo os padrões de `AGENTS.md`.
+
+4. **Valide** o build:
    ```bash
-   npm run dev
+   npm run build   # deve terminar sem erros
    ```
 
-3. Validate the project before you finish:
+5. **Atualize a documentação** se necessário (ver seção abaixo).
 
-   ```bash
-   npm run build
-   ```
+6. **Abra um pull request** com a checklist preenchida.
 
-## Contribution rules
+---
 
-Follow these rules when you update the repository.
+## Quando atualizar documentação
 
-- Keep the login screen as the main entry point.
-- Route student features through the student shell.
-- Route teacher features through the teacher shell.
-- Avoid leaving features accessible only by direct route unless that is a
-  deliberate product requirement.
-- Keep `src/` focused on app bootstrap, routing, and wrappers.
-- Keep `01-app-core/` as the source for product shells and focused feature
-  modules until a larger refactor is planned.
+| Mudança no código | Documentos a atualizar |
+|-------------------|----------------------|
+| Nova view no shell do aluno | `docs/ARCHITECTURE.md` (tabela de views) + `docs/SPRINTS.md` (Done) |
+| Nova view no shell do professor | `docs/ARCHITECTURE.md` + `docs/SPRINTS.md` |
+| Novo componente em `src/components/` | `docs/ARCHITECTURE.md` (seção componentes compartilhados) |
+| Novo arquivo em `src/lib/` | `docs/ARCHITECTURE.md` (tabela da camada src) |
+| Nova rota em `src/App.jsx` | `docs/ARCHITECTURE.md` (fluxo de autenticação) + `README.md` |
+| Nova dependência npm | `docs/STACK.md` |
+| Nova convenção de código | `AGENTS.md` |
+| Mudança estrutural maior | `README.md` |
 
-## Documentation expectations
+---
 
-Update documentation when you make any of the following changes:
+## Regras de contribuição
 
-- Add a new product module
-- Move or rename a shell
-- Change route behavior
-- Change the repository structure
+**Estrutura:**
+- Mantenha o fluxo login-first intacto.
+- Features do aluno vão no shell do aluno; features do professor no shell do professor.
+- Não deixe features acessíveis apenas por URL direta — integre ao shell.
+- `src/` é para bootstrapping, routing e wrappers. Lógica de produto fica em `01-app-core/`.
 
-At minimum, update:
+**Código:**
+- Somente Tailwind CSS — zero CSS modules, styled-components ou @apply.
+- Ícones somente de `lucide-react` — verifique o nome em `lucide.dev`.
+- Export nomeado em `src/components/`, export default em `01-app-core/`.
+- Zero `console.log` commitado.
 
-- `README.md`
-- `docs/ARCHITECTURE.md`
+**Commits** (Conventional Commits em português):
+```
+feat(shell): adiciona view de cronograma adaptativo
+fix(modal): corrige overflow em telas menores que 640px
+style: aplica paleta navy/amarelo no banner do aluno
+refactor(raio-x): extrai dados para StudentFeatures.jsx
+docs: atualiza ARCHITECTURE.md com nova view
+```
 
-## Pull request checklist
+---
 
-Before opening a pull request, verify the following:
+## Checklist de pull request
 
-- The app runs locally.
-- `npm run build` passes.
-- The change is integrated into the correct shell.
-- Any new routes still respect the login-led flow.
-- Documentation reflects the current implementation.
+Antes de abrir o PR, confirme cada item:
 
-## Scope guidance
+- [ ] `npm run build` termina sem erros
+- [ ] A feature está integrada no shell correto (não só em arquivo isolado)
+- [ ] Nenhuma rota nova viola o fluxo login-first
+- [ ] Documentação atualizada conforme a tabela acima
+- [ ] Zero `console.log`, `TODO` ou `FIXME` no código
+- [ ] Ícones Lucide verificados por nome em `lucide.dev`
+- [ ] Commits seguem Conventional Commits
 
-Prefer narrow, intentional pull requests.
+---
 
-Good examples:
+## Escopo de pull requests
 
-- Integrate one new student module into the student shell
-- Fix one shell navigation issue
-- Improve repository documentation
+Prefira PRs focados em um único tipo de mudança.
 
-Avoid mixing unrelated cleanup, feature work, and documentation in one large
-change unless the repository genuinely requires it.
+**Exemplos de bom escopo:**
+- Integrar um novo módulo do aluno
+- Corrigir um bug de layout em um componente específico
+- Atualizar documentação de arquitetura
+- Refatorar um componente para `src/components/`
+
+**Evite misturar:**
+- Feature nova + refactor não relacionado
+- Mudança de produto + mudança de infraestrutura
+- Múltiplos módulos não relacionados em um PR
+
+---
+
+## Contato
+
+Bugs, sugestões e feedback: `plfonseca@usp.br`
+
+Para contexto adicional do projeto e histórico de decisões, consulte
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) e o histórico de commits.
