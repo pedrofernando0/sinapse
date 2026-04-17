@@ -1,111 +1,124 @@
 # Sinapse
 
-Sinapse is a React and Vite prototype for an educational platform with two
-primary journeys: a student experience and a teacher experience. The current
-repository integrates all available screens into a single application flow that
-starts at the login screen and branches by profile.
+Plataforma educacional do **Cursinho Popular da Poli** (EPUSP). Prototype React
+com dois perfis de usuário: aluno (vestibulando) e professor. Desenvolvido para
+centralizar ferramentas de estudo, acompanhamento de turma e suporte ao aprendizado.
 
-The codebase keeps the original product shells and feature prototypes in
-`01-app-core/`. The application bootstrap, routing, and integration wrappers
-live in `src/`.
+---
 
-## Product overview
+## Produto
 
-Sinapse includes two main shells:
+Sinapse tem dois shells principais, acessados após login com seleção de perfil:
 
-- **Student shell** with study planning, diagnostics, reading, revision,
-  simulated exams, AI-assisted study modules, emotional support, and tutoring.
-- **Teacher shell** with class overview, student tracking, attendance,
-  simulated exam analysis, and lesson planning.
+**Shell do aluno** — jornada completa de preparação para vestibulares:
+- Raio-X de incidência por vestibular (ENEM, FUVEST, UNESP, UNICAMP)
+- Diagnóstico de nivelamento por tópico
+- Calendário de marcos estratégicos
+- Cronograma semanal editável
+- Leituras obrigatórias FUVEST
+- Revisões espaçadas
+- Simulados com análise de performance
+- Pomodoro com sistema de XP
+- Aprovação FUVEST
+- Módulos de IA: Tutoria, Discursiva, Redação FUVEST
+- Mentoria com ex-alunos da Poli
+- Medidor de humor e Rede de apoio
 
-The login screen routes users to the correct shell:
+**Shell do professor** — acompanhamento de turma:
+- Visão geral da turma com KPIs
+- Análise individual de alunos
+- Frequência e risco de evasão
+- Análise de simulados da turma
+- Planejador de aulas
 
-- `Login -> student -> full student journey`
-- `Login -> teacher -> full teacher journey`
+---
 
 ## Tech stack
 
-Sinapse uses the following stack:
+| Biblioteca | Versão | Uso |
+|-----------|--------|-----|
+| React | 19 | UI framework |
+| Vite | 8 | Build tool e dev server |
+| React Router | 7 | Roteamento entre shells |
+| Tailwind CSS | 3 | Estilização (100% utilitários) |
+| Lucide React | 1.8 | Ícones |
+| Framer Motion | 12 | Animações complexas |
+| Recharts | 3 | Gráficos |
+| date-fns | 4 | Manipulação de datas |
 
-- `React 19`
-- `Vite 8`
-- `React Router`
-- `Tailwind CSS`
-- `Lucide React`
-- `Framer Motion`
-- `date-fns`
-- `Recharts`
+Referência completa de cada biblioteca: [`docs/STACK.md`](docs/STACK.md).
 
-## Getting started
+---
 
-Use the following steps to run the project locally.
-
-1. Install dependencies:
-
-   ```bash
-   npm install
-   ```
-
-2. Start the development server:
-
-   ```bash
-   npm run dev
-   ```
-
-3. Open the application in your browser using the URL shown by Vite.
-
-To create a production build, run:
+## Rodando localmente
 
 ```bash
-npm run build
+npm install
+npm run dev
 ```
 
-To preview the production build locally, run:
+Acesse `http://localhost:5173`. Faça login com:
+- `valentina` / `valentina` (aluno)
+- `pedro` / `pedro` (aluno, acesso total)
+- Qualquer usuário selecionando o perfil "Professor"
 
 ```bash
-npm run preview
+npm run build    # build de produção
+npm run preview  # preview do build
 ```
 
-## Repository structure
+---
 
-The repository is intentionally split between source prototypes and integration
-layers.
+## Estrutura do repositório
 
-```text
+```
 sinapse/
-├── 01-app-core/          # original screens and product-focused shells
-├── docs/                 # repository and architecture documentation
-├── src/                  # app bootstrap, routes, and wrappers
-├── index.html            # Vite entry HTML
-├── package.json          # scripts and dependencies
-└── tailwind.config.js    # Tailwind configuration
+├── 01-app-core/    # shells de produto e módulos de features
+├── src/            # bootstrap, roteamento, wrappers, componentes compartilhados
+├── docs/           # documentação técnica
+│   ├── ARCHITECTURE.md   # design do sistema
+│   ├── SPRINTS.md        # kanban e backlog
+│   └── STACK.md          # referência por biblioteca
+├── CLAUDE.md       # contexto rápido para agentes de IA
+├── AGENTS.md       # paradigmas técnicos para intervenções de IA
+├── CONTRIBUTING.md # guia de contribuição
+└── README.md       # este arquivo
 ```
 
-## Routing model
+Detalhes da arquitetura: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-Sinapse uses a simple route model:
+---
 
-- `/` and `/login` render the login experience.
-- `/aluno` renders the integrated student shell.
-- `/professor` renders the integrated teacher shell.
-- Legacy `/modulos/*` routes redirect into the correct student shell view.
+## Modelo de roteamento
 
-## Architecture notes
+```
+/         → redireciona para /login
+/login    → tela de login com seleção de perfil
+/aluno    → shell do aluno (requer sessão)
+/professor → shell do professor (requer sessão)
+```
 
-The application does not treat each file in `01-app-core/` as an isolated page.
-Instead, those files represent focused product explorations that are integrated
-back into the main shells.
+Navegação interna aos shells usa estado via `AppContext` (não rotas adicionais).
+A URL reflete a view ativa via query param: `/aluno?view=raio-x`.
 
-For the current architecture and integration rules, see
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+---
 
-## Contributing
+## Documentação
 
-If you plan to extend or clean up the repository before publishing it, read
-[CONTRIBUTING.md](CONTRIBUTING.md).
+| Documento | Conteúdo |
+|-----------|---------|
+| [`CLAUDE.md`](CLAUDE.md) | Contexto de projeto para agentes de IA — leia primeiro |
+| [`AGENTS.md`](AGENTS.md) | Paradigmas técnicos de intervenção para IA |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Arquitetura, fluxos, contextos React |
+| [`docs/SPRINTS.md`](docs/SPRINTS.md) | Backlog, sprints e kanban |
+| [`docs/STACK.md`](docs/STACK.md) | Referência técnica por biblioteca |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Workflow de contribuição e checklist de PR |
+
+---
 
 ## Status
 
-This repository is a product prototype under active organization. The current
-goal is to preserve all built screens while making the codebase easier to run,
-review, and publish.
+Prototype em desenvolvimento ativo. Dados são mockados. Autenticação é demo.
+Backlog completo e sprints planejados em [`docs/SPRINTS.md`](docs/SPRINTS.md).
+
+Contato: `plfonseca@usp.br`
