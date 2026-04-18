@@ -1,5 +1,5 @@
 import { lazy, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import StudentShell from '../features/student/StudentShell.jsx';
 import { clearDemoSession, getStoredDemoSession } from '../lib/demoSession.js';
 
@@ -33,8 +33,13 @@ export default function StudentShellPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const session = getStoredDemoSession('aluno');
+
+  if (!session) {
+    return <Navigate to="/login" replace />;
+  }
+
   const initialView = searchParams.get('view') || 'dashboard';
-  const safeInitialView = session?.hiddenStudentViews?.includes(initialView) ? 'dashboard' : initialView;
+  const safeInitialView = session.hiddenStudentViews?.includes(initialView) ? 'dashboard' : initialView;
 
   useEffect(() => {
     if (safeInitialView !== initialView) {

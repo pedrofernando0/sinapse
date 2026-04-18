@@ -53,14 +53,20 @@ Referência completa de cada biblioteca: [`docs/STACK.md`](docs/STACK.md).
 ## Rodando localmente
 
 ```bash
+cp .env.example .env.local
 npm install
 npm run dev
 ```
 
-Acesse `http://localhost:5173`. Faça login com:
-- `valentina` / `valentina` (aluno)
-- `pedro` / `pedro` (aluno, acesso total)
-- Qualquer usuário selecionando o perfil "Professor"
+Acesse `http://localhost:5173`.
+
+- Ajuste as credenciais demo em `.env.local` se quiser manter perfis seedados
+  como `valentina` e `pedro`.
+- Sem credenciais demo configuradas, o login continua funcional em modo demo,
+  mas sem senhas fixas versionadas no repositório.
+- As sessões demo expiram por TTL e usam `sessionStorage` por padrão. Troque
+  `VITE_DEMO_SESSION_STORAGE` para `local` apenas se você realmente precisar de
+  persistência entre reinícios do navegador.
 
 ```bash
 npm run build    # build de produção

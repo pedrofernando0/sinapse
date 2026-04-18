@@ -59,8 +59,18 @@ npm run build    # build de produção em /dist
 npm run preview  # preview do /dist em localhost
 ```
 
+### Variáveis de ambiente
+O projeto usa `.env.example` como template e espera credenciais locais em
+`.env.local` quando você quiser habilitar contas demo seedadas.
+
+- Apenas variáveis `VITE_*` ficam disponíveis no cliente.
+- Não trate `VITE_*` como segredo de produção. Tudo que entra no bundle pode ser
+  inspecionado no navegador.
+- Use `.env.local` para setup local e mantenha senhas reais fora do frontend.
+
 ### O que evitar
-- Não use `import.meta.env` sem definir a variável em `.env` (causará `undefined` em build).
+- Não use `import.meta.env` sem definir a variável correspondente em `.env.local`
+  ou no ambiente de build.
 - Não configure `base` no `vite.config.js` sem entender o impacto nas rotas do React Router.
 - Não ignore warnings de "missing export" — eles viram erros em produção.
 

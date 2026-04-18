@@ -189,7 +189,7 @@ const StudentShellPage = lazy(() => import('../pages/StudentShellPage.jsx'));
 | `pages/LoginPage.jsx` | Builds session, navigates to shell |
 | `pages/StudentShellPage.jsx` | Reads session + `?view=`, lazy-loads cross-slice student views, and injects them into `StudentShell.jsx` |
 | `pages/TeacherShellPage.jsx` | Reads session + `?view=`, injects props into teacher shell |
-| `lib/demoSession.js` | Session CRUD on `localStorage` |
+| `lib/demoSession.js` | Session CRUD on configured Web Storage with TTL validation |
 | `lib/launchExperience.js` | Welcome destination per profile |
 | `lib/pageLoaders.js` | Shell chunk preload |
 | `components/ProfileActionPanels.jsx` | Settings + help modals (both profiles) |
@@ -217,19 +217,19 @@ tutoria, mentoria, humor, rede-de-apoio
 1. User: selects profile + credentials in features/auth/Login.jsx
 2. LoginPage.handleLogin({ profile, formData })
 3. buildDemoSession()       → { name, profile, hiddenViews }
-4. persistDemoSession()     → localStorage['sinapse.demo-session']
+4. persistDemoSession()     → sessionStorage/localStorage['sinapse.demo-session']
 5. preloadShellPage()       → preloads shell chunk
 6. navigate()               → /aluno or /professor
 7. StudentShellPage         → getStoredDemoSession() + lazy view map
 8. StudentShell             → receives { initialView, session, externalViews, onLogout }
 ```
 
-Demo accounts (`demoSession.js`):
+Demo accounts (`demoSession.js` + `.env.local`):
 
 | User | Password | Profile | Restrictions |
 |------|----------|---------|--------------|
-| valentina | valentina | student | `discursiva-ia` hidden |
-| pedro | pedro | student | none |
+| `VITE_DEMO_STUDENT_USERNAME` | `VITE_DEMO_STUDENT_PASSWORD` | student | `discursiva-ia` hidden |
+| `VITE_DEMO_POWER_USER_USERNAME` | `VITE_DEMO_POWER_USER_PASSWORD` | student | none |
 | any | any | teacher | none |
 
 ---

@@ -2,7 +2,7 @@
 
 Plataforma educacional do **Cursinho Popular da Poli** (EPUSP). Prototype React em
 produção ativa. Dois perfis: aluno (vestibulando) e professor. Nenhum backend real —
-toda persistência via `localStorage`; dados são mockados para fins de produto.
+dados são mockados e a sessão demo usa Web Storage configurável com TTL.
 
 ---
 
@@ -15,8 +15,9 @@ npm run build      # build de produção (Vite — valida JSX/imports)
 npm run preview    # preview do build de produção
 ```
 
-> **Contas demo** (login screen): `valentina / valentina` (aluno) ou `pedro / pedro`
-> (aluno). Professor: qualquer usuário que escolha o perfil "Professor" no login.
+> **Setup demo**: copie `.env.example` para `.env.local` e defina as credenciais
+> `VITE_DEMO_*` se quiser manter contas seedadas. Professor continua aceitando
+> qualquer usuário em modo demo.
 
 ---
 
@@ -128,11 +129,12 @@ professor, refletindo `currentView` em `?view=` pelo wrapper.
 | Função | O que faz |
 |--------|-----------|
 | `buildDemoSession(profile, formData)` | cria objeto de sessão |
-| `persistDemoSession(session)` | salva em `localStorage` com chave `sinapse.demo-session` |
-| `getStoredDemoSession(profile)` | lê e valida sessão existente |
+| `persistDemoSession(session)` | salva em `sessionStorage` ou `localStorage`, conforme `SECURITY_CONFIG` |
+| `getStoredDemoSession(profile)` | lê, valida TTL e rejeita sessão inválida |
 | `clearDemoSession()` | remove ao fazer logout |
 
-Contas demo embutidas: `valentina` (aluno, sem discursiva-ia) e `pedro` (aluno, tudo visível).
+As contas seedadas usam variáveis `VITE_DEMO_*`. O repositório não mantém mais
+senhas demo fixas em código versionado.
 
 ---
 
