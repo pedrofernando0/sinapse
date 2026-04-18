@@ -74,6 +74,13 @@ export default function DiscursiveAI() {
   const [showResolution, setShowResolution] = useState(false);
   
   const textAreaRef = useRef(null);
+  const resultsRef = useRef(null);
+
+  useEffect(() => {
+    if (status === 'evaluated' && resultsRef.current) {
+      resultsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [status]);
 
   // Inserção de símbolos na posição do cursor
   const handleInsertSymbol = (symbol) => {
@@ -290,7 +297,7 @@ export default function DiscursiveAI() {
 
           {/* TELA DE FEEDBACK DA IA (Pós-avaliação) */}
           {status === 'evaluated' && evaluation && (
-            <div className="space-y-6 animate-in slide-in-from-right-8 duration-500">
+            <div ref={resultsRef} className="space-y-6 animate-in slide-in-from-right-8 duration-500">
               
               {/* Card de Nota Final */}
               <Card className="overflow-hidden">

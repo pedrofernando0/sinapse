@@ -13,6 +13,36 @@ import {
   TrendingUp,
   XCircle,
 } from 'lucide-react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  Radar,
+} from 'recharts';
+
+const RADAR_DATA = [
+  { subject: 'Matemática', score: 72 },
+  { subject: 'Humanas', score: 65 },
+  { subject: 'Linguagens', score: 80 },
+  { subject: 'Natureza', score: 58 },
+];
+
+const LineTooltip = ({ active, payload }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg">
+      <p className="text-sm font-black text-slate-800">{payload[0].value}%</p>
+      <p className="text-[11px] font-semibold text-slate-500">{payload[0].payload.name}</p>
+    </div>
+  );
+};
 
 const INITIAL_SIMULADOS = [
   { id: 1, name: 'ENEM 2024 - Dia 1', date: '2026-02-15', acertos: 72, total: 90, level: 'good', time: '04:15' },
@@ -86,6 +116,17 @@ export default function Simulados() {
       ).padStart(2, '0')}m`,
     };
   }, [simulados]);
+
+  const chartData = useMemo(
+    () =>
+      [...simulados]
+        .sort((a, b) => new Date(a.date) - new Date(b.date))
+        .map((s) => ({
+          name: s.name.length > 14 ? `${s.name.substring(0, 14)}…` : s.name,
+          score: Math.round((s.acertos / s.total) * 100),
+        })),
+    [simulados],
+  );
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -449,9 +490,9 @@ export default function Simulados() {
             </div>
 
             <div className="border-t border-slate-100 pt-6">
-              <div className="mb-6 flex items-center justify-between">
+              <div className="mb-4 flex items-center justify-between">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  Histórico recente
+                  Evolução de notas
                 </p>
                 {metrics.trend === 'up' ? (
                   <TrendingUp size={16} className="text-teal-500" />
@@ -462,29 +503,33 @@ export default function Simulados() {
                 )}
               </div>
 
-              <div className="flex h-16 w-full items-end gap-2 px-2">
-                {simulados
-                  .slice(0, 7)
-                  .reverse()
-                  .map((simulado) => {
-                    const score = Math.round((simulado.acertos / simulado.total) * 100);
-                    const isBest = score === metrics.bestScore && score > 0;
-
-                    return (
-                      <div
-                        key={simulado.id}
-                        className="group relative flex h-full flex-1 items-end justify-center overflow-hidden rounded-t-md bg-slate-50"
-                      >
-                        <div
-                          className={`w-full rounded-t-md transition-all duration-700 ${
-                            isBest ? 'bg-amber-400' : 'bg-blue-200 group-hover:bg-blue-300'
-                          }`}
-                          style={{ height: `${score}%` }}
-                        />
-                      </div>
-                    );
-                  })}
-              </div>
+              <ResponsiveContainer width="100%" height={110}>
+                <LineChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -28 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 9, fill: '#94a3b8', fontWeight: 600 }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    domain={[0, 100]}
+                    tick={{ fontSize: 9, fill: '#94a3b8', fontWeight: 600 }}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(v) => `${v}%`}
+                  />
+                  <Tooltip content={<LineTooltip />} />
+                  <Line
+                    type="monotone"
+                    dataKey="score"
+                    stroke="#3b82f6"
+                    strokeWidth={2.5}
+                    dot={{ fill: '#3b82f6', r: 4, strokeWidth: 2, stroke: '#fff' }}
+                    activeDot={{ r: 6, fill: '#2563eb' }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
           </Card>
 
@@ -505,6 +550,44 @@ export default function Simulados() {
                 do pace fortalecerá sua vantagem competitiva.
               </p>
             </div>
+          </Card>
+
+          <Card className="border-slate-200 bg-white shadow-md">
+            <div className="mb-4 flex items-center gap-2">
+              <BarChart2 size={18} className="text-blue-600" />
+              <h3 className="text-sm font-bold uppercase tracking-widest text-slate-800">
+                Radar de áreas
+              </h3>
+            </div>
+            <p className="mb-4 text-xs font-medium text-slate-500">
+              Pontos fortes e vulnerabilidades por grande área do ENEM.
+            </p>
+            <ResponsiveContainer width="100%" height={200}>
+              <RadarChart cx="50%" cy="50%" outerRadius="70%" data={RADAR_DATA}>
+                <PolarGrid stroke="#e2e8f0" />
+                <PolarAngleAxis
+                  dataKey="subject"
+                  tick={{ fontSize: 10, fill: '#64748b', fontWeight: 700 }}
+                />
+                <Radar
+                  dataKey="score"
+                  stroke="#3b82f6"
+                  fill="#3b82f6"
+                  fillOpacity={0.15}
+                  strokeWidth={2}
+                  dot={{ fill: '#3b82f6', r: 3 }}
+                />
+                <Tooltip
+                  formatter={(value) => [`${value}%`, 'Aproveitamento']}
+                  contentStyle={{
+                    borderRadius: '12px',
+                    border: '1px solid #e2e8f0',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                  }}
+                />
+              </RadarChart>
+            </ResponsiveContainer>
           </Card>
         </div>
       </div>

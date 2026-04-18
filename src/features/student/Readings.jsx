@@ -294,6 +294,18 @@ export default function Readings() {
         </p>
       </div>
 
+      {books.length === 0 && (
+        <div className="flex flex-col items-center rounded-2xl border border-slate-200/60 bg-white/80 p-16 text-center shadow-sm backdrop-blur-md animate-in fade-in zoom-in-95 duration-300">
+          <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-slate-50">
+            <BookDashed size={40} className="text-slate-300" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-800">Nenhuma leitura cadastrada</h3>
+          <p className="mt-1 max-w-xs text-sm text-slate-500">
+            As obras obrigatórias da FUVEST aparecerão aqui quando forem adicionadas ao seu plano.
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
         {books.map((book) => (
           <Card

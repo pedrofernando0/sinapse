@@ -54,6 +54,21 @@ export default function Pomodoro({ addXp = () => {} }) {
   }, [mode, settings]);
 
   useEffect(() => {
+    if (isActive) {
+      const mins = Math.floor(timeLeft / 60);
+      const secs = timeLeft % 60;
+      const formatted = `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+      const modeLabel = mode === 'focus' ? 'Foco' : 'Pausa';
+      document.title = `(${formatted}) ${modeLabel} — Sinapse`;
+    } else {
+      document.title = 'Sinapse';
+    }
+    return () => {
+      document.title = 'Sinapse';
+    };
+  }, [isActive, timeLeft, mode]);
+
+  useEffect(() => {
     if (!isActive) {
       clearInterval(timerRef.current);
       return undefined;

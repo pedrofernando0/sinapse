@@ -716,6 +716,30 @@ const CronogramaView = () => {
 // 5. SHELL DE NAVEGAÇÃO (Sidebar, Header, Layout)
 // ============================================================================
 
+const SkeletonLoader = () => (
+  <div className="space-y-6 animate-pulse">
+    <div className="h-44 rounded-3xl bg-slate-200" />
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="h-20 rounded-2xl bg-slate-200" />
+      ))}
+    </div>
+    <div className="rounded-2xl bg-white/80 border border-slate-200/60 shadow-sm p-6 space-y-5">
+      <div className="h-4 w-36 rounded-full bg-slate-200" />
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="flex items-center gap-4">
+          <div className="h-11 w-11 rounded-xl bg-slate-200 flex-shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 rounded-full bg-slate-200" style={{ width: `${60 + i * 10}%` }} />
+            <div className="h-2 rounded-full bg-slate-100 w-full" />
+          </div>
+          <div className="h-4 w-10 rounded-full bg-slate-200 flex-shrink-0" />
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
 const SidebarItem = ({ icon: Icon, label, id, disabled }) => {
   const { currentView, navigate } = useApp();
   const isActive = currentView === id;
@@ -1054,13 +1078,7 @@ const Layout = ({ onLogout, externalViews = {} }) => {
 
         {/* Área de Conteúdo Rolável */}
         <div className={`flex-1 overflow-y-auto ${isImmersiveView ? 'bg-slate-50' : 'p-4 md:p-8 pb-24 md:pb-8'}`}>
-          <Suspense
-            fallback={
-              <div className="flex min-h-[40vh] items-center justify-center text-sm font-semibold text-slate-500">
-                Carregando módulo...
-              </div>
-            }
-          >
+          <Suspense fallback={<SkeletonLoader />}>
             {currentView === 'dashboard' && <DashboardView />}
             {currentView === 'calendario' && <CalendarManagerView />}
             {currentView === 'raio-x' && <RaioXSection />}

@@ -37,6 +37,61 @@ const Card = ({ children, className = '' }) => (
   </div>
 );
 
+const EMPTY_STATES = {
+  hoje: {
+    icon: CheckCircle2,
+    iconClass: 'text-teal-400',
+    title: 'Dia livre de revisões!',
+    message: 'Ótimo momento para adiantar um novo tópico ou fazer um simulado.',
+    cta: 'Agendar revisão para hoje',
+  },
+  atrasadas: {
+    icon: CheckCircle2,
+    iconClass: 'text-teal-400',
+    title: 'Nenhuma revisão atrasada!',
+    message: 'Você está em dia com tudo. Continue assim!',
+    cta: null,
+  },
+  proximas: {
+    icon: Calendar,
+    iconClass: 'text-blue-300',
+    title: 'Sem revisões agendadas',
+    message: 'Programe as próximas revisões para manter o ritmo da curva de memória.',
+    cta: 'Agendar próxima revisão',
+  },
+  concluidas: {
+    icon: CheckCircle2,
+    iconClass: 'text-slate-300',
+    title: 'Nenhuma revisão concluída ainda',
+    message: 'Complete uma revisão e ela aparecerá aqui.',
+    cta: null,
+  },
+};
+
+const EmptyRevisions = ({ filter, onAdd }) => {
+  const config = EMPTY_STATES[filter] ?? EMPTY_STATES.hoje;
+  const Icon = config.icon;
+
+  return (
+    <div className="flex flex-col items-center p-12 text-center animate-in fade-in zoom-in-95 duration-300">
+      <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-slate-50">
+        <Icon size={40} className={config.iconClass} />
+      </div>
+      <h3 className="text-lg font-bold text-slate-800">{config.title}</h3>
+      <p className="mt-1 max-w-xs text-sm text-slate-500">{config.message}</p>
+      {config.cta && (
+        <button
+          onClick={onAdd}
+          className="mt-6 flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-blue-500/20 transition-all hover:bg-blue-700 active:scale-95"
+        >
+          <Plus size={16} />
+          {config.cta}
+        </button>
+      )}
+    </div>
+  );
+};
+
 export default function Revisions() {
   const [revisions, setRevisions] = useState([
     { id: 1, subject: 'Matemática', topic: 'Geometria Espacial', date: getToday(), status: 'pending' },
@@ -193,11 +248,7 @@ export default function Revisions() {
 
       <Card className="overflow-hidden border border-slate-200 p-0 shadow-sm">
         {filteredRevisions.length === 0 ? (
-          <div className="flex flex-col items-center p-12 text-center">
-            <CheckCircle2 size={48} className="mb-4 text-slate-200 animate-in zoom-in duration-500" />
-            <h3 className="text-lg font-bold text-slate-800">Tudo limpo por aqui!</h3>
-            <p className="mt-1 text-slate-500">Você não tem revisões nesta categoria.</p>
-          </div>
+          <EmptyRevisions filter={filter} onAdd={() => openModal()} />
         ) : (
           <div className="divide-y divide-slate-100">
             {filteredRevisions.map((revision) => {
