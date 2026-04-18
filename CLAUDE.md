@@ -16,8 +16,9 @@ npm run preview    # preview do build de produção
 ```
 
 > **Setup demo**: copie `.env.example` para `.env.local` e defina as credenciais
-> `VITE_DEMO_*` se quiser manter contas seedadas. Professor continua aceitando
-> qualquer usuário em modo demo.
+> `VITE_DEMO_*` se quiser manter contas seedadas. Quando contas do aluno estão
+> configuradas, o shell do aluno passa a validá-las. Professor continua
+> aceitando qualquer combinação não vazia em modo demo.
 
 ---
 
@@ -107,18 +108,22 @@ src/main.jsx  (createRoot + BrowserRouter)
   └── App.jsx  (provider host)
         └── routes/AppRoutes.jsx
               ├── /  /login   → LoginPage → features/auth/Login.jsx
-              │                  └── handleLogin() → buildDemoSession() → navigate(/aluno)
+              │                  └── handleLogin() → buildDemoSession() → navigate(destino do perfil)
               ├── /aluno/*    → StudentShellPage
-              │                  ├── lê sessão + ?view=
+              │                  ├── lê sessão + saneia ?view=
+              │                  ├── sincroniza currentView ↔ ?view=
               │                  ├── injeta lazy views cross-slice quando necessário
               │                  └── features/student/StudentShell.jsx
               └── /professor/* → TeacherShellPage
+                                  ├── lê sessão + saneia ?view=
+                                  ├── sincroniza currentView ↔ ?view=
                                   └── features/teacher/TeacherShell.jsx
 ```
 
 Navegação interna aos shells **não usa React Router**: usa
 `AppContext.navigate(view)` no aluno e `TeacherContext.navigate(view)` no
-professor, refletindo `currentView` em `?view=` pelo wrapper.
+professor. Os wrappers dos shells refletem `currentView` em `?view=` e
+rebaixam views inválidas para `dashboard` ou `overview`.
 
 ---
 
@@ -128,13 +133,15 @@ professor, refletindo `currentView` em `?view=` pelo wrapper.
 
 | Função | O que faz |
 |--------|-----------|
-| `buildDemoSession(profile, formData)` | cria objeto de sessão |
+| `buildDemoSession(profile, formData)` | cria objeto de sessão ou retorna `null` quando o login demo do aluno é inválido |
 | `persistDemoSession(session)` | salva em `sessionStorage` ou `localStorage`, conforme `SECURITY_CONFIG` |
 | `getStoredDemoSession(profile)` | lê, valida TTL e rejeita sessão inválida |
 | `clearDemoSession()` | remove ao fazer logout |
 
 As contas seedadas usam variáveis `VITE_DEMO_*`. O repositório não mantém mais
-senhas demo fixas em código versionado.
+senhas demo fixas em código versionado. Quando não há contas do aluno
+configuradas, o shell do aluno continua aceitando qualquer combinação não
+vazia em modo demo.
 
 ---
 

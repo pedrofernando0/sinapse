@@ -62,8 +62,13 @@ Acesse `http://localhost:5173`.
 
 - Ajuste as credenciais demo em `.env.local` se quiser manter perfis seedados
   como `valentina` e `pedro`.
-- Sem credenciais demo configuradas, o login continua funcional em modo demo,
-  mas sem senhas fixas versionadas no repositório.
+- Se você configurar contas demo do aluno em `.env.local`, o shell do aluno
+  passa a validar essas credenciais antes de abrir a sessão.
+- Sem contas demo seedadas para o aluno, o login do aluno continua funcional em
+  modo demo com qualquer combinação não vazia, sem senhas fixas versionadas no
+  repositório.
+- O shell do professor continua aceitando qualquer combinação não vazia em modo
+  demo.
 - As sessões demo expiram por TTL e usam `sessionStorage` por padrão. Troque
   `VITE_DEMO_SESSION_STORAGE` para `local` apenas se você realmente precisar de
   persistência entre reinícios do navegador.
@@ -98,7 +103,7 @@ Detalhes da arquitetura: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 ## Modelo de roteamento
 
 ```
-/         → redireciona para /login
+/         → tela de login (mesma entrada de /login)
 /login    → tela de login com seleção de perfil
 /aluno    → shell do aluno (requer sessão)
 /professor → shell do professor (requer sessão)
@@ -106,7 +111,9 @@ Detalhes da arquitetura: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 A navegação interna aos shells usa estado via `AppContext` e `TeacherContext`
 (não rotas adicionais).
-A URL reflete a view ativa via query param: `/aluno?view=raio-x`.
+A URL reflete a view ativa via query param, por exemplo,
+`/aluno?view=raio-x`. Os wrappers dos shells também saneiam `?view=` inválida
+para um fallback seguro (`dashboard` no aluno, `overview` no professor).
 
 ---
 
@@ -125,7 +132,9 @@ A URL reflete a view ativa via query param: `/aluno?view=raio-x`.
 
 ## Status
 
-Prototype em desenvolvimento ativo. Dados são mockados. Autenticação é demo.
-Backlog completo e sprints planejados em [`docs/SPRINTS.md`](docs/SPRINTS.md).
+Prototype em desenvolvimento ativo. Dados são mockados. A autenticação continua
+demo, com validação de contas seedadas no shell do aluno quando elas existem.
+Backlog completo e sprints planejados em
+[`docs/SPRINTS.md`](docs/SPRINTS.md).
 
 Contato: `plfonseca@usp.br`

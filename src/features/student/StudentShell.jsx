@@ -129,6 +129,26 @@ const getFirstName = (name = '') => {
 };
 
 const getNameInitial = (name = '') => getFirstName(name).charAt(0).toUpperCase();
+const VIEW_TITLES = {
+  dashboard: 'Início',
+  'raio-x': 'Raio-X',
+  diagnostico: 'Diagnóstico',
+  calendario: 'Calendário',
+  cronograma: 'Cronograma',
+  leituras: 'Leituras',
+  pomodoro: 'Pomodoro',
+  revisoes: 'Revisões',
+  simulados: 'Simulados',
+  'aprovacao-fuvest': 'Aprovação FUVEST',
+  'discursiva-ia': 'Discursiva IA',
+  'redacao-ia-fuvest': 'Redação IA FUVEST',
+  'simulador-tri': 'Simulador TRI',
+  tutoria: 'Tutoria com IA',
+  mentoria: 'Mentoria',
+  humor: 'Medidor de Humor',
+  'rede-de-apoio': 'Rede de Apoio',
+};
+export const STUDENT_VIEW_IDS = Object.freeze(Object.keys(VIEW_TITLES));
 
 // ============================================================================
 // 2. CONTEXTO GLOBAL (Substitui a injeção manual do Hexagonal para UI State)
@@ -136,7 +156,7 @@ const getNameInitial = (name = '') => getFirstName(name).charAt(0).toUpperCase()
 
 const AppContext = createContext();
 
-const AppProvider = ({ children, initialView = 'dashboard', session = null }) => {
+const AppProvider = ({ children, initialView = 'dashboard', session = null, onViewChange = null }) => {
   const hiddenViews = getHiddenStudentViews(session);
   const hiddenViewsKey = hiddenViews.join('|');
   const [currentView, setCurrentView] = useState(() => sanitizeStudentView(initialView, hiddenViews));
@@ -150,6 +170,12 @@ const AppProvider = ({ children, initialView = 'dashboard', session = null }) =>
   useEffect(() => {
     setUser(buildStudentUser(session));
   }, [session?.name]);
+
+  useEffect(() => {
+    if (typeof onViewChange === 'function') {
+      onViewChange(currentView);
+    }
+  }, [currentView, onViewChange]);
 
   const navigate = (view) => {
     setCurrentView(sanitizeStudentView(view, hiddenViews));
@@ -175,26 +201,6 @@ const AppProvider = ({ children, initialView = 'dashboard', session = null }) =>
 };
 
 const useApp = () => useContext(AppContext);
-
-const VIEW_TITLES = {
-  dashboard: 'Início',
-  'raio-x': 'Raio-X',
-  diagnostico: 'Diagnóstico',
-  calendario: 'Calendário',
-  cronograma: 'Cronograma',
-  leituras: 'Leituras',
-  pomodoro: 'Pomodoro',
-  revisoes: 'Revisões',
-  simulados: 'Simulados',
-  'aprovacao-fuvest': 'Aprovação FUVEST',
-  'discursiva-ia': 'Discursiva IA',
-  'redacao-ia-fuvest': 'Redação IA FUVEST',
-  'simulador-tri': 'Simulador TRI',
-  tutoria: 'Tutoria com IA',
-  mentoria: 'Mentoria',
-  humor: 'Medidor de Humor',
-  'rede-de-apoio': 'Rede de Apoio',
-};
 
 const IMMERSIVE_VIEWS = new Set([
   'aprovacao-fuvest',
@@ -1156,9 +1162,15 @@ const Layout = ({ onLogout, externalViews = {} }) => {
 // 6. COMPONENTE RAIZ
 // ============================================================================
 
-export default function StudentShell({ initialView = 'dashboard', onLogout, session = null, externalViews = {} }) {
+export default function StudentShell({
+  initialView = 'dashboard',
+  onLogout,
+  session = null,
+  externalViews = {},
+  onViewChange = null,
+}) {
   return (
-    <AppProvider initialView={initialView} session={session}>
+    <AppProvider initialView={initialView} session={session} onViewChange={onViewChange}>
       <Layout onLogout={onLogout} externalViews={externalViews} />
     </AppProvider>
   );

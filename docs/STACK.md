@@ -66,6 +66,10 @@ O projeto usa `.env.example` como template e espera credenciais locais em
 - Apenas variáveis `VITE_*` ficam disponíveis no cliente.
 - Não trate `VITE_*` como segredo de produção. Tudo que entra no bundle pode ser
   inspecionado no navegador.
+- Quando contas demo do aluno existem, o login do aluno valida essas
+  credenciais. Sem essas contas, o shell do aluno volta ao modo demo aberto com
+  qualquer combinação não vazia. O shell do professor permanece aberto em modo
+  demo.
 - Use `.env.local` para setup local e mantenha senhas reais fora do frontend.
 
 ### O que evitar
@@ -97,11 +101,12 @@ Navegação interna (estado):
 ```
 
 ### Query param sync
-`StudentShellPage` lê `?view=` via `useSearchParams()`, resolve a sessão e injeta
-`initialView` no shell. Quando a view pertence a outro slice (`ai-tools/` ou
+`StudentShellPage` e `TeacherShellPage` leem `?view=` via `useSearchParams()`,
+resolvem a sessão, saneiam valores inválidos e injetam `initialView` no shell.
+Quando a view do aluno pertence a outro slice (`ai-tools/` ou
 `assessments/`), o wrapper também monta o mapa de lazy imports e o passa para
-`StudentShell.jsx`. O shell não escreve diretamente na URL — o wrapper cuida
-disso.
+`StudentShell.jsx`. O shell não escreve diretamente na URL, o wrapper cuida
+disso e também espelha a view ativa de volta na query string.
 
 ### O que evitar
 - Não crie rotas novas em `src/routes/AppRoutes.jsx` para views internas dos shells. Use o sistema de

@@ -116,6 +116,15 @@ const classSimulados = [
   { id: 2, name: 'FUVEST 2025 - 1ª Fase', avgScore: 48, date: '08 Mar', totalStudents: 4 },
   { id: 3, name: 'ENEM 2023 - Dia 1', avgScore: 66, date: '29 Mar', totalStudents: 2 },
 ];
+const TEACHER_VIEW_TITLES = {
+  overview: 'Painel Principal',
+  students: 'Acompanhamento Individual',
+  planner: 'Planejador de Aula',
+  'simulados-class': 'Análise de Simulados',
+  attendance: 'Frequência da Turma',
+};
+export const TEACHER_VIEW_IDS = Object.freeze(Object.keys(TEACHER_VIEW_TITLES));
+const sanitizeTeacherView = (view) => (TEACHER_VIEW_IDS.includes(view) ? view : 'overview');
 
 // ============================================================================
 // 2. CONTEXTO GLOBAL DO PROFESSOR
@@ -123,8 +132,8 @@ const classSimulados = [
 
 const TeacherContext = createContext();
 
-const TeacherProvider = ({ children, initialView = 'overview', session = null }) => {
-  const [currentView, setCurrentView] = useState(initialView);
+const TeacherProvider = ({ children, initialView = 'overview', session = null, onViewChange = null }) => {
+  const [currentView, setCurrentView] = useState(() => sanitizeTeacherView(initialView));
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState(mockStudents[0].id);
   const teacherProfile = useMemo(
@@ -138,12 +147,18 @@ const TeacherProvider = ({ children, initialView = 'overview', session = null })
 
   useEffect(() => {
     if (initialView) {
-      setCurrentView(initialView);
+      setCurrentView(sanitizeTeacherView(initialView));
     }
   }, [initialView]);
 
+  useEffect(() => {
+    if (typeof onViewChange === 'function') {
+      onViewChange(currentView);
+    }
+  }, [currentView, onViewChange]);
+
   const navigate = (view) => {
-    setCurrentView(view);
+    setCurrentView(sanitizeTeacherView(view));
     setSidebarOpen(false);
   };
 
@@ -666,6 +681,7 @@ const AttendanceView = () => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {mockStudents
+                .slice()
                 .sort((a,b) => (a.attendance.present / a.attendance.total) - (b.attendance.present / b.attendance.total))
                 .map(student => {
                   const percent = Math.round((student.attendance.present / student.attendance.total) * 100);
@@ -767,17 +783,6 @@ const Header = ({ onLogout }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const getViewTitle = () => {
-    switch (currentView) {
-      case 'overview': return 'Painel Principal';
-      case 'students': return 'Acompanhamento Individual';
-      case 'simulados-class': return 'Análise de Simulados';
-      case 'attendance': return 'Frequência da Turma';
-      case 'planner': return 'Planejador de Aula';
-      default: return currentView.replace('-', ' ');
-    }
-  };
-
   return (
     <header className="h-16 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 md:px-8 z-30 relative">
       <div className="flex items-center gap-4">
@@ -785,7 +790,7 @@ const Header = ({ onLogout }) => {
           <Menu size={24} />
         </button>
         <h1 className="font-bold text-lg text-slate-800 capitalize hidden sm:block">
-          {getViewTitle()}
+          {TEACHER_VIEW_TITLES[currentView] || currentView.replace('-', ' ')}
         </h1>
       </div>
       
@@ -993,9 +998,9 @@ const Layout = ({ onLogout }) => {
 // 6. COMPONENTE RAIZ
 // ============================================================================
 
-export default function TeacherShell({ initialView = 'overview', onLogout, session = null }) {
+export default function TeacherShell({ initialView = 'overview', onLogout, session = null, onViewChange = null }) {
   return (
-    <TeacherProvider initialView={initialView} session={session}>
+    <TeacherProvider initialView={initialView} session={session} onViewChange={onViewChange}>
       <Layout onLogout={onLogout} />
     </TeacherProvider>
   );

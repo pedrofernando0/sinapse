@@ -9,6 +9,9 @@ export default function LoginPage() {
 
   const handleLogin = ({ profile, formData }) => {
     const session = buildDemoSession({ profile, formData });
+    if (!session) {
+      return;
+    }
     persistDemoSession(session);
     preloadShellPage(profile);
     navigate(getLaunchDestination(profile));

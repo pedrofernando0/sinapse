@@ -31,9 +31,13 @@ Contas de demonstração para testar o produto:
 
 | Usuário | Senha | Perfil |
 |---------|-------|--------|
-| valentina | valentina | Aluno |
-| pedro | pedro | Aluno |
-| qualquer nome | qualquer senha | Professor |
+| `VITE_DEMO_STUDENT_USERNAME` | `VITE_DEMO_STUDENT_PASSWORD` | Aluno |
+| `VITE_DEMO_POWER_USER_USERNAME` | `VITE_DEMO_POWER_USER_PASSWORD` | Aluno |
+| qualquer valor não vazio | qualquer valor não vazio | Professor |
+
+Se você não configurar contas demo seedadas para o aluno em `.env.local`, o
+shell do aluno também continua funcional em modo demo com qualquer combinação
+não vazia.
 
 ---
 

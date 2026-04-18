@@ -1,6 +1,6 @@
-import { lazy, useEffect } from 'react';
+import { lazy, useCallback, useEffect } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
-import StudentShell from '../features/student/StudentShell.jsx';
+import StudentShell, { STUDENT_VIEW_IDS } from '../features/student/StudentShell.jsx';
 import { clearDemoSession, getStoredDemoSession } from '../lib/demoSession.js';
 
 const ReadingsView = lazy(() => import('../features/student/Readings.jsx'));
@@ -31,28 +31,43 @@ const STUDENT_SHELL_EXTERNAL_VIEWS = {
 
 export default function StudentShellPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const session = getStoredDemoSession('aluno');
 
   if (!session) {
     return <Navigate to="/login" replace />;
   }
 
-  const initialView = searchParams.get('view') || 'dashboard';
-  const safeInitialView = session.hiddenStudentViews?.includes(initialView) ? 'dashboard' : initialView;
+  const requestedView = searchParams.get('view');
+  const initialView = requestedView || 'dashboard';
+  const safeInitialView = !STUDENT_VIEW_IDS.includes(initialView) || session.hiddenStudentViews?.includes(initialView)
+    ? 'dashboard'
+    : initialView;
 
   useEffect(() => {
-    if (safeInitialView !== initialView) {
-      navigate(`/aluno?view=${safeInitialView}`, { replace: true });
+    if (requestedView === safeInitialView) {
+      return;
     }
-  }, [initialView, navigate, safeInitialView]);
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.set('view', safeInitialView);
+    setSearchParams(nextSearchParams, { replace: true });
+  }, [requestedView, safeInitialView, searchParams, setSearchParams]);
+
+  const handleViewChange = useCallback((nextView) => {
+    if (requestedView === nextView) {
+      return;
+    }
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.set('view', nextView);
+    setSearchParams(nextSearchParams);
+  }, [requestedView, searchParams, setSearchParams]);
 
   return (
     <StudentShell
-      key={safeInitialView}
       initialView={safeInitialView}
       session={session}
       externalViews={STUDENT_SHELL_EXTERNAL_VIEWS}
+      onViewChange={handleViewChange}
       onLogout={() => {
         clearDemoSession();
         navigate('/login');

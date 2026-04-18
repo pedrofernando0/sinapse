@@ -25,6 +25,7 @@ const DEMO_ACCOUNTS = [
 const DEMO_ACCOUNTS_BY_USERNAME = Object.fromEntries(
   DEMO_ACCOUNTS.map((account) => [account.username, account])
 );
+const hasConfiguredStudentDemoAccounts = DEMO_ACCOUNTS.some((account) => account.password);
 
 const formatDisplayName = (value = '') =>
   value
@@ -83,6 +84,25 @@ const getDemoAccountByCredentials = ({ username = '', password = '' } = {}) => {
   );
 };
 
+export function isDemoLoginAllowed({ profile, formData } = {}) {
+  const username = normalizeCredential(formData?.username);
+  const password = normalizePassword(formData?.password);
+
+  if (!username || !password) {
+    return false;
+  }
+
+  if (profile !== 'aluno') {
+    return true;
+  }
+
+  if (!hasConfiguredStudentDemoAccounts) {
+    return true;
+  }
+
+  return Boolean(getDemoAccountByCredentials(formData));
+}
+
 export function getDemoDisplayName({ name = '', username = '' } = {}) {
   if (name?.trim()) {
     return formatDisplayName(name);
@@ -125,6 +145,10 @@ export function normalizeDemoSession(session) {
 }
 
 export function buildDemoSession({ profile, formData }) {
+  if (!isDemoLoginAllowed({ profile, formData })) {
+    return null;
+  }
+
   const baseSession = {
     profile,
     username: normalizeCredential(formData?.username),

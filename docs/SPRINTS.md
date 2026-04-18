@@ -46,6 +46,62 @@ Sprints semanais informais. Prioridade: P0 (bloqueante) → P3 (nice-to-have).
 - [x] SA-2.6: `src/features/teacher/LessonPlanner.jsx` migrado de `legacy/lesson-planner.jsx`
 - [x] Runtime: `src/` não importa mais de `legacy/`
 
+#### Sprint Arq — Integração de Views (Resumo Técnico)
+
+**Status**: ✅ **CONCLUÍDO** (18 de Abril de 2026)
+
+##### Mapa de Views do Student Shell
+
+| View ID | Módulo | Localização | Lazy Import | Status | Imersivo |
+|---------|--------|-------------|------------|--------|----------|
+| `dashboard` | Dashboard | `src/features/student/StudentShell.jsx` | Inline | ✅ | ❌ |
+| `raio-x` | Raio-X | `src/features/student/StudentShell.jsx` | Inline | ✅ | ❌ |
+| `diagnostico` | Diagnóstico | `src/features/student/StudentShell.jsx` | Inline | ✅ | ❌ |
+| `calendario` | Calendar | `src/features/student/StudentShell.jsx` | Inline | ✅ | ❌ |
+| `cronograma` | Schedule | `src/features/student/StudentShell.jsx` | Inline | ✅ | ❌ |
+| `leituras` | Readings | `src/features/student/Readings.jsx` | Via `StudentShellPage.jsx` | ✅ | ❌ |
+| `pomodoro` | Pomodoro | `src/features/student/StudentShell.jsx` | Inline | ✅ | ❌ |
+| `revisoes` | Revisions | `src/features/student/Revisions.jsx` | Via `StudentShellPage.jsx` | ✅ | ❌ |
+| `simulados` | Simulados | `src/features/assessments/Simulados.jsx` | Via `StudentShellPage.jsx` | ✅ | ❌ |
+| `aprovacao-fuvest` | Fuvest Approval | `src/features/assessments/FuvestApproval.jsx` | Via `StudentShellPage.jsx` | ✅ | ✅ |
+| `discursiva-ia` | Discursive AI | `src/features/ai-tools/DiscursiveAI.jsx` | Via `StudentShellPage.jsx` | ✅ | ✅ |
+| `redacao-ia-fuvest` | Essay Review | `src/features/ai-tools/EssayReview.jsx` | Via `StudentShellPage.jsx` | ✅ | ❌ |
+| `simulador-tri` | TRI Simulator | `src/features/assessments/TriSimulator.jsx` | Via `StudentShellPage.jsx` | ✅ | ✅ |
+| `tutoria` | Tutoria IA | `src/features/ai-tools/Tutoria.jsx` | Via `StudentShellPage.jsx` | ✅ | ✅ |
+| `mentoria` | Mentorship | `src/features/student/Mentorship.jsx` | Via `StudentShellPage.jsx` | ✅ | ✅ |
+| `humor` | Mood Tracker | `src/features/student/MoodTracker.jsx` | Via `StudentShellPage.jsx` | ✅ | ✅ |
+| `rede-de-apoio` | Support Network | `src/features/student/SupportNetwork.jsx` | Via `StudentShellPage.jsx` | ✅ | ✅ |
+
+##### Padrão de Integração
+
+**Views Internas** (renderizadas dentro de `StudentShell.jsx`):
+- Importadas com `lazy()` no início do arquivo
+- Renderizadas no bloco condicional `{currentView === 'id' && <Component />}`
+- Lógica e UI no mesmo slice (`src/features/student/`)
+
+**Views Externas** (injetadas via `externalViews`):
+- Importadas com `lazy()` em `StudentShellPage.jsx`
+- Adicionadas ao objeto `STUDENT_SHELL_EXTERNAL_VIEWS`
+- Passadas para `<StudentShell externalViews={...} />`
+- Renderizadas via proxy no shell: `{currentView === 'id' && externalViews.ComponentName && <externalViews.ComponentName />}`
+
+##### Orquestração de Estado
+
+- `StudentShellPage.jsx` gerencia `?view=` via URL params
+- `useSearchParams` sincroniza estado da URL com Redux DevTools
+- Views inválidas ou ocultas (`hiddenStudentViews`) rebaixam para `dashboard`
+- Session carregada via `getStoredDemoSession('aluno')`
+
+##### Checklist de Conformidade
+
+- ✅ Todas as views em `STUDENT_VIEW_IDS` coincidem com os lazy imports
+- ✅ Todas as views imersivas estão em `IMMERSIVE_VIEWS` (8 total)
+- ✅ Sem `export default` em `src/components/` (apenas named exports)
+- ✅ Zero `console.log`, `TODO`, `FIXME` no código
+- ✅ Build sem erros: 206.86 kB (65.31 kB gzip)
+
+**Referência**: [`src/pages/StudentShellPage.jsx`](../src/pages/StudentShellPage.jsx), [`docs/ARCHITECTURE.md`](./ARCHITECTURE.md)
+
 #### Sprint 2 — Qualidade & Conteúdo (Abril 2026)
 
 - [x] Corrigir overflow nos modais de Configurações e Ajuda
@@ -57,6 +113,8 @@ Sprints semanais informais. Prioridade: P0 (bloqueante) → P3 (nice-to-have).
 - [x] Extrair `RaioXSection` e `MentoriaView` → `src/components/StudentFeatures.jsx`
 - [x] Mentoria: banner sticky "Ex-alunos do Cursinho Popular da Poli"
 - [x] Fix: `useApp()` em event handler → hook no corpo do componente
+- [x] Fix: valida credenciais demo do aluno quando contas seedadas existem
+- [x] Fix: sincroniza `currentView` com `?view=` e saneia views inválidas nos shells
 
 #### Sprint 1 — Fundação (Mar–Abr 2026)
 
@@ -64,7 +122,7 @@ Sprints semanais informais. Prioridade: P0 (bloqueante) → P3 (nice-to-have).
 - [x] Shell do professor (`teacher-shell.jsx`) com 5 views
 - [x] Login com seleção de perfil
 - [x] Launch experience animada por perfil
-- [x] Sistema de sessão demo com `localStorage`
+- [x] Sistema de sessão demo com Web Storage configurável
 - [x] Módulo: Calendário (date-fns)
 - [x] Módulo: Cronograma semanal editável
 - [x] Módulo: Leituras obrigatórias FUVEST

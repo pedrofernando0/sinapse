@@ -103,16 +103,21 @@ main.jsx  (BrowserRouter)
         └── routes/AppRoutes.jsx
               ├── /  /login     → pages/LoginPage → features/auth/Login.jsx
               ├── /aluno/*      → pages/StudentShellPage
-              │                   ├── reads session + view query
+              │                   ├── reads session + sanitizes view query
+              │                   ├── syncs currentView back to ?view=
               │                   ├── lazy-loads student / assessments / ai-tools modules
               │                   └── features/student/StudentShell.jsx
-              └── /professor/*  → pages/TeacherShellPage → features/teacher/TeacherShell.jsx
+              └── /professor/*  → pages/TeacherShellPage
+                                  ├── reads session + sanitizes view query
+                                  ├── syncs currentView back to ?view=
+                                  └── features/teacher/TeacherShell.jsx
 ```
 
 Internal shell navigation does NOT use React Router — uses
 `AppContext.navigate(viewId)` in the student shell and
 `TeacherContext.navigate(viewId)` in the teacher shell. Both update
-`currentView`, which is synced to `?view=` by the wrapper page.
+`currentView`, which is synced to `?view=` by the wrapper page. The wrappers
+also coerce invalid view ids to safe fallbacks (`dashboard` or `overview`).
 
 ---
 
@@ -186,10 +191,10 @@ const StudentShellPage = lazy(() => import('../pages/StudentShellPage.jsx'));
 | `main.jsx` | `createRoot` + `BrowserRouter` |
 | `App.jsx` | Provider host — renders `<AppRoutes />` only |
 | `routes/AppRoutes.jsx` | Declarative route config |
-| `pages/LoginPage.jsx` | Builds session, navigates to shell |
-| `pages/StudentShellPage.jsx` | Reads session + `?view=`, lazy-loads cross-slice student views, and injects them into `StudentShell.jsx` |
-| `pages/TeacherShellPage.jsx` | Reads session + `?view=`, injects props into teacher shell |
-| `lib/demoSession.js` | Session CRUD on configured Web Storage with TTL validation |
+| `pages/LoginPage.jsx` | Builds a demo session, short-circuits invalid student login, and navigates to the shell |
+| `pages/StudentShellPage.jsx` | Reads session + `?view=`, sanitizes invalid or hidden views, lazy-loads cross-slice student views, and injects them into `StudentShell.jsx` |
+| `pages/TeacherShellPage.jsx` | Reads session + `?view=`, sanitizes invalid views, and injects props into teacher shell |
+| `lib/demoSession.js` | Session CRUD on configured Web Storage with TTL validation and student demo credential checks |
 | `lib/launchExperience.js` | Welcome destination per profile |
 | `lib/pageLoaders.js` | Shell chunk preload |
 | `components/ProfileActionPanels.jsx` | Settings + help modals (both profiles) |
@@ -216,12 +221,12 @@ tutoria, mentoria, humor, rede-de-apoio
 ```
 1. User: selects profile + credentials in features/auth/Login.jsx
 2. LoginPage.handleLogin({ profile, formData })
-3. buildDemoSession()       → { name, profile, hiddenViews }
-4. persistDemoSession()     → sessionStorage/localStorage['sinapse.demo-session']
+3. buildDemoSession()       → session object or null
+4. persistDemoSession()     → runs only when session exists
 5. preloadShellPage()       → preloads shell chunk
 6. navigate()               → /aluno or /professor
-7. StudentShellPage         → getStoredDemoSession() + lazy view map
-8. StudentShell             → receives { initialView, session, externalViews, onLogout }
+7. ShellPage                → getStoredDemoSession() + sanitized view
+8. StudentShellPage         → also injects the cross-slice lazy view map
 ```
 
 Demo accounts (`demoSession.js` + `.env.local`):
@@ -230,7 +235,11 @@ Demo accounts (`demoSession.js` + `.env.local`):
 |------|----------|---------|--------------|
 | `VITE_DEMO_STUDENT_USERNAME` | `VITE_DEMO_STUDENT_PASSWORD` | student | `discursiva-ia` hidden |
 | `VITE_DEMO_POWER_USER_USERNAME` | `VITE_DEMO_POWER_USER_PASSWORD` | student | none |
-| any | any | teacher | none |
+| any non-empty | any non-empty | teacher | none |
+
+If no student demo accounts are configured, the student shell falls back to
+accepting any non-empty credential pair in demo mode. Teacher demo remains open
+to any non-empty credentials.
 
 ---
 
