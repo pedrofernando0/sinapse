@@ -120,13 +120,17 @@ Sprints semanais informais. Prioridade: P0 (bloqueante) → P3 (nice-to-have).
 ### Sprint 4 — Autenticação Real (estimativa: Jun 2026)
 
 > Substituir sistema de sessão demo por auth real.
+> Vercel resolve deploy e variáveis server-side, mas não transforma `VITE_*`
+> em segredo. Sessão, refresh token e credenciais sensíveis precisam sair do
+> frontend e ir para Functions/Edge ou backend dedicado.
 
 | ID | Item | Prioridade | Estimativa |
 |----|------|-----------|-----------|
-| S4-01 | Integrar Supabase Auth ou Firebase | P0 | 2d |
-| S4-02 | Substituir `demoSession.js` por hook `useAuth()` | P0 | 1d |
-| S4-03 | Rota protegida: redirect para `/login` sem sessão | P0 | 0.5d |
-| S4-04 | Persistência com refresh token | P1 | 1d |
+| S4-00 | Definir boundary client/server no Vercel para auth e segredos | P0 | 0.5d |
+| S4-01 | Integrar Supabase Auth ou Firebase via camada server-side | P0 | 2d |
+| S4-02 | Substituir `demoSession.js` por `useAuth()` + cookie `httpOnly` | P0 | 1d |
+| S4-03 | Rota protegida: redirect para `/login` sem sessão válida | P0 | 0.5d |
+| S4-04 | Emitir e renovar sessão em endpoint server-side | P1 | 1d |
 | S4-05 | Cadastro de alunos (form + validação) | P1 | 1d |
 | S4-06 | Recuperação de senha | P2 | 0.5d |
 | S4-07 | Perfil do aluno editável | P2 | 1d |
@@ -135,9 +139,12 @@ Sprints semanais informais. Prioridade: P0 (bloqueante) → P3 (nice-to-have).
 
 > Integrar LLMs nos módulos de tutoria e redação.
 > Depende de Sprint Arq SA-2.3 estar concluído.
+> Chaves de provedor nunca ficam no bundle do cliente; integração real passa por
+> proxy server-side no Vercel ou backend dedicado.
 
 | ID | Item | Prioridade | Estimativa |
 |----|------|-----------|-----------|
+| S5-00 | Criar proxy server-side para chamadas LLM | P0 | 1d |
 | S5-01 | Claude API no módulo Tutoria com IA | P0 | 2d |
 | S5-02 | Claude API no módulo Redação IA FUVEST | P0 | 2d |
 | S5-03 | Prompt templates por disciplina | P1 | 1d |
