@@ -396,12 +396,19 @@ export default function Login({ onLogin }) {
 
 /* ---------- Subcomponentes presentacionais ---------- */
 
+const PANEL_TRANSITION_STYLE = {
+  transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)',
+};
+
 function BrandingPanel({ active, direction, children }) {
   const dirClass = direction === 'left' ? '-translate-x-12' : 'translate-x-12';
   return (
-    <div className={`transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] absolute inset-0 flex flex-col justify-center ${
-      active ? 'opacity-100 translate-x-0 pointer-events-auto' : `opacity-0 ${dirClass} pointer-events-none`
-    }`}>
+    <div
+      className={`absolute inset-0 flex flex-col justify-center transition-all duration-700 ${
+        active ? 'opacity-100 translate-x-0 pointer-events-auto' : `opacity-0 ${dirClass} pointer-events-none`
+      }`}
+      style={PANEL_TRANSITION_STYLE}
+    >
       {children}
     </div>
   );
@@ -427,9 +434,14 @@ function FeatureList({ features, iconColor, dimmed, hoverBorder }) {
 
 function StepPanel({ active, enter, exit, center, children }) {
   return (
-    <div className={`absolute inset-0 flex flex-col ${center ? 'items-center justify-center text-center' : 'justify-center'} transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-      active ? `opacity-100 ${enter} pointer-events-auto z-10` : `opacity-0 ${exit} pointer-events-none z-0`
-    }`}>
+    <div
+      className={`absolute inset-0 flex flex-col transition-all duration-700 ${
+        center ? 'items-center justify-center text-center' : 'justify-center'
+      } ${
+        active ? `opacity-100 ${enter} pointer-events-auto z-10` : `opacity-0 ${exit} pointer-events-none z-0`
+      }`}
+      style={PANEL_TRANSITION_STYLE}
+    >
       {children}
     </div>
   );

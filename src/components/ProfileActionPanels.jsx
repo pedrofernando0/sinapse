@@ -120,7 +120,7 @@ const loadStoredSettings = (storageKey, defaultSettings) => {
   }
 };
 
-const ModalFrame = ({ open, onClose, theme, eyebrow, title, description, icon: Icon, children, footer }) => {
+export const ModalFrame = ({ open, onClose, theme, eyebrow, title, description, icon: Icon, children, footer }) => {
   useEffect(() => {
     if (!open) {
       return undefined;
