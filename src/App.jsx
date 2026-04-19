@@ -1,11 +1,15 @@
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
+import { AuthBootstrap } from './lib/useAuth.js';
 import AppRoutes from './routes/AppRoutes.jsx';
-import { StoreBootstrap } from './store/index.js';
 
 export default function App() {
   return (
     <>
-      <StoreBootstrap />
+      <AuthBootstrap />
       <AppRoutes />
+      <Analytics />
+      <SpeedInsights />
     </>
   );
 }

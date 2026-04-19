@@ -6,27 +6,19 @@ import {
   useSearchParams,
 } from 'react-router-dom';
 import { TEACHER_VIEW_IDS } from '../features/teacher/TeacherShell.jsx';
-import { clearDemoSession, getStoredDemoSession } from '../lib/demoSession.js';
+import { getLaunchDestination } from '../lib/launchExperience.js';
+import { logoutSession } from '../services/auth.js';
 import { useAppStore } from '../store/index.js';
 
 export default function TeacherShellLayout() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const session = getStoredDemoSession('professor');
-  const setSession = useAppStore((state) => state.setSession);
+  const authStatus = useAppStore((state) => state.authStatus);
+  const session = useAppStore((state) => state.session);
   const clearSession = useAppStore((state) => state.clearSession);
   const requestedView = searchParams.get('view');
   const initialView = requestedView || 'overview';
   const safeInitialView = !session || !TEACHER_VIEW_IDS.includes(initialView) ? 'overview' : initialView;
-
-  useEffect(() => {
-    if (session) {
-      setSession(session);
-      return;
-    }
-
-    clearSession();
-  }, [clearSession, session, setSession]);
 
   useEffect(() => {
     if (!session || requestedView === safeInitialView) {
@@ -49,9 +41,10 @@ export default function TeacherShellLayout() {
   }, [requestedView, searchParams, setSearchParams]);
 
   const handleLogout = useCallback(() => {
-    clearSession();
-    clearDemoSession();
-    navigate('/login');
+    logoutSession().catch(() => {}).finally(() => {
+      clearSession();
+      navigate('/login', { replace: true });
+    });
   }, [clearSession, navigate]);
 
   const outletContext = useMemo(() => ({
@@ -61,8 +54,16 @@ export default function TeacherShellLayout() {
     onLogout: handleLogout,
   }), [handleLogout, handleViewChange, safeInitialView, session]);
 
+  if (authStatus === 'loading') {
+    return <div className="min-h-screen bg-[#050505]" />;
+  }
+
   if (!session) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (session.profile !== 'professor') {
+    return <Navigate to={getLaunchDestination(session.profile)} replace />;
   }
 
   return <Outlet context={outletContext} />;

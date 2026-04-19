@@ -8,7 +8,11 @@ import {
 } from 'lucide-react';
 import { AccountHelpModal, AccountSettingsModal } from '../../components/ProfileActionPanels.jsx';
 import { RaioXSection, MentoriaView } from '../../components/StudentFeatures.jsx';
-import { getStudentNotifications } from '../../services/student.js';
+import {
+  getStudentNotifications,
+  markAllStudentNotificationsAsRead,
+  markStudentNotificationAsRead,
+} from '../../services/student.js';
 import { useAppStore } from '../../store/index.js';
 
 const CalendarManagerView = lazy(() => import('./CalendarView.jsx'));
@@ -900,6 +904,10 @@ const Layout = ({ onLogout, externalViews = {} }) => {
         notification.id === notificationId ? { ...notification, read: true } : notification
       )
     );
+
+    markStudentNotificationAsRead(notificationId).catch(() => {
+      loadNotifications();
+    });
   };
 
   const markAllNotificationsAsRead = () => {
@@ -922,7 +930,13 @@ const Layout = ({ onLogout, externalViews = {} }) => {
     animTimers.current.push(
       setTimeout(() => {
         setNotifAnimPhase('done');
-        setNotifications((prev) => prev.map((notification) => ({ ...notification, read: true })));
+        markAllStudentNotificationsAsRead()
+          .then(() => {
+            setNotifications((prev) => prev.map((notification) => ({ ...notification, read: true })));
+          })
+          .catch(() => {
+            loadNotifications();
+          });
       }, doneDelay)
     );
     animTimers.current.push(

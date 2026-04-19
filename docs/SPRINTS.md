@@ -45,36 +45,23 @@ saem daqui para manter o backlog operacional limpo.
 
 ### Sprint 3 — Real Data Layer (estimativa: Mai 2026)
 
-> Substituir mocks por dados reais sem quebrar a UI.
-> Depende de SA-1.5 (shell migrado) estar concluído.
-> Primeiro slice entregue: contrato inicial + `GET /student/notifications` com
-> loading, empty e erro no shell do aluno.
+> Sprint reduzida aos itens ainda pendentes apos a integracao direta com Supabase
+> para notificacoes, revisoes e simulados do aluno.
 
 | ID | Item | Prioridade | Estimativa |
 |----|------|-----------|-----------|
-| S3-04 | Substituir dados de simulados por API | P1 | 1d |
-| S3-05 | Substituir dados de revisões por API | P1 | 1d |
-| S3-06 | Expandir loading/error/empty para simulados e revisões quando esses módulos migrarem | P1 | 1d |
 | S3-07 | Error boundary global | P2 | 0.5d |
 | S3-08 | Cache de requisições com TTL simples | P2 | 1d |
 
 ### Sprint 4 — Autenticação Real (estimativa: Jun 2026)
 
-> Substituir sistema de sessão demo por auth real.
-> Vercel resolve deploy e variáveis server-side, mas não transforma `VITE_*`
-> em segredo. Sessão, refresh token e credenciais sensíveis precisam sair do
-> frontend e ir para Functions/Edge ou backend dedicado.
+> Auth real via Supabase ja entregue no cliente com cadastro, login, reset de
+> senha e perfil roteado por role. Permanecem apenas os refinamentos abaixo.
 
 | ID | Item | Prioridade | Estimativa |
 |----|------|-----------|-----------|
-| S4-00 | Definir boundary client/server no Vercel para auth e segredos | P0 | 0.5d |
-| S4-01 | Integrar Supabase Auth ou Firebase via camada server-side | P0 | 2d |
-| S4-02 | Substituir `demoSession.js` por `useAuth()` + cookie `httpOnly` | P0 | 1d |
-| S4-03 | Rota protegida: redirect para `/login` sem sessão válida | P0 | 0.5d |
-| S4-04 | Emitir e renovar sessão em endpoint server-side | P1 | 1d |
-| S4-05 | Cadastro de alunos (form + validação) | P1 | 1d |
-| S4-06 | Recuperação de senha | P2 | 0.5d |
 | S4-07 | Perfil do aluno editável | P2 | 1d |
+| S4-08 | Ajustar auth settings de produção/preview no Supabase Dashboard | P1 | 0.5d |
 
 ### Sprint 5 — IA Real (estimativa: Jul 2026)
 

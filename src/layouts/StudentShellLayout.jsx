@@ -6,29 +6,21 @@ import {
   useSearchParams,
 } from 'react-router-dom';
 import { STUDENT_VIEW_IDS } from '../features/student/StudentShell.jsx';
-import { clearDemoSession, getStoredDemoSession } from '../lib/demoSession.js';
+import { getLaunchDestination } from '../lib/launchExperience.js';
+import { logoutSession } from '../services/auth.js';
 import { useAppStore } from '../store/index.js';
 
 export default function StudentShellLayout() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const session = getStoredDemoSession('aluno');
-  const setSession = useAppStore((state) => state.setSession);
+  const authStatus = useAppStore((state) => state.authStatus);
+  const session = useAppStore((state) => state.session);
   const clearSession = useAppStore((state) => state.clearSession);
   const requestedView = searchParams.get('view');
   const initialView = requestedView || 'dashboard';
   const safeInitialView = !session || !STUDENT_VIEW_IDS.includes(initialView) || session.hiddenStudentViews?.includes(initialView)
     ? 'dashboard'
     : initialView;
-
-  useEffect(() => {
-    if (session) {
-      setSession(session);
-      return;
-    }
-
-    clearSession();
-  }, [clearSession, session, setSession]);
 
   useEffect(() => {
     if (!session || requestedView === safeInitialView) {
@@ -51,9 +43,10 @@ export default function StudentShellLayout() {
   }, [requestedView, searchParams, setSearchParams]);
 
   const handleLogout = useCallback(() => {
-    clearSession();
-    clearDemoSession();
-    navigate('/login');
+    logoutSession().catch(() => {}).finally(() => {
+      clearSession();
+      navigate('/login', { replace: true });
+    });
   }, [clearSession, navigate]);
 
   const outletContext = useMemo(() => ({
@@ -63,8 +56,16 @@ export default function StudentShellLayout() {
     onLogout: handleLogout,
   }), [handleLogout, handleViewChange, safeInitialView, session]);
 
+  if (authStatus === 'loading') {
+    return <div className="min-h-screen bg-[#050505]" />;
+  }
+
   if (!session) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (session.profile !== 'aluno') {
+    return <Navigate to={getLaunchDestination(session.profile)} replace />;
   }
 
   return <Outlet context={outletContext} />;
