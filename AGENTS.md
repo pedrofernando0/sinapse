@@ -430,3 +430,46 @@ Um agente deve pausar e solicitar confirmação humana quando:
 - **Simplicity First**: Código mínimo para resolver o problema. Nenhuma flexibilidade especulativa não solicitada.
 - **Surgical Changes**: Toque apenas no que for estritamente necessário. Não reformate ou refatore código adjacente.
 - **Goal-Driven Execution**: Defina critérios de sucesso e divida a tarefa em passos verificáveis.
+
+
+<claude-mem-context>
+# Memory Context
+
+# [sinapse] recent context, 2026-04-18 10:11pm GMT-3
+
+Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision
+Format: ID TIME TYPE TITLE
+Fetch details: get_observations([IDs]) | Search: mem-search skill
+
+Stats: 26 obs (9,850t read) | 707,952t work | 99% savings
+
+### Apr 18, 2026
+34 9:03p 🟣 Vitest + Testing Library Configured for Sinapse
+35 " 🟣 Supabase Client Integrated via shadcn CLI — sinapse
+36 " 🔵 Sinapse Auth Layer — Demo-Only with VITE_DEMO_* Env Vars
+39 " 🔵 Sinapse — Supabase Client Uses @supabase/ssr, Not supabase-js Directly
+40 " ✅ shadcn Nova Preset CSS Variables Injected into src/index.css
+41 " 🟣 Supabase Agent Skills Installed in sinapse Project Environment
+42 9:06p 🔴 CSS Build Failure Fixed — @apply bg-background Removed, CSS vars Used Directly
+43 " 🔵 Sinapse Build Succeeds with lightningcss Warnings — Non-Fatal
+44 " 🔵 Supabase Agent Skills Install Cancelled Before Completion
+48 9:07p 🔵 Sinapse — .git Directory is Read-Only in Codex Sandbox
+51 9:08p 🔵 Codex Sandbox — git add Blocked Even After Branch Creation Succeeds
+53 9:11p ✅ Sinapse — Sprint Changes Staged for Commit on Branch claude/configure-tests-supabase-r9k4
+54 9:13p ✅ Sinapse — Sprint Commit Pushed to GitHub PR Branch
+56 9:19p 🔵 Sinapse Sprint Backlog — Full Pending Work Inventory
+58 9:20p 🔵 Sinapse Architecture — Complete File Inventory and SA-3.2 Gap Confirmed
+59 9:22p 🔵 Sinapse Build and Test Status — Green Baseline Confirmed
+60 " 🔵 TeacherShell.jsx — Same React Context Pattern as StudentShell, Both Need SA-3.2
+61 " ⚖️ Sinapse Blueprint Plan Scope — Sprint Arq to Sprint 4, Supabase Backend
+68 9:25p ⚖️ Sinapse Sprint 4 — Execution Plan Organized (5 Phases)
+69 " 🔵 Sinapse App.jsx + AppRoutes.jsx — Full Routing Architecture Confirmed
+71 9:26p 🔵 Sinapse Test Coverage Gap — Only 1 Test File Exists Across Entire src/
+73 " 🔵 Login.jsx Has SSO Buttons (Google/Apple) as UI Stubs — Not Wired to Auth
+75 " 🔵 Both Shells Use Local Context Providers — Sprint 3 Zustand Migration Target Mapped
+77 9:28p 🔵 Login.jsx — "Esqueceu a senha?" Links to # (Dead Placeholder) + LLM Design Note in Loading Widget
+78 9:31p 🟣 Sinapse — 6 New Test Files Written for Sprint 4 TDD RED Phase
+79 " 🔵 Sinapse TDD RED Gate — 10 Failures Across 6 Suites Reveal Exact Implementation Gaps
+
+Access 708k tokens of past work via get_observations([IDs]) or mem-search skill.
+</claude-mem-context>
