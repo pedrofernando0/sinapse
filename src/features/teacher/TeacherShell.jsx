@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import LessonPlanner from './LessonPlanner.jsx';
 import { AccountHelpModal, AccountSettingsModal } from '../../components/ProfileActionPanels.jsx';
+import { useAppStore } from '../../store/index.js';
 
 // ============================================================================
 // 1. DADOS MOCKADOS
@@ -134,8 +135,9 @@ const TeacherContext = createContext();
 
 const TeacherProvider = ({ children, initialView = 'overview', session = null, onViewChange = null }) => {
   const [currentView, setCurrentView] = useState(() => sanitizeTeacherView(initialView));
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState(mockStudents[0].id);
+  const sidebarOpen = useAppStore((state) => state.teacherSidebarOpen);
+  const setSidebarOpen = useAppStore((state) => state.setTeacherSidebarOpen);
   const teacherProfile = useMemo(
     () => ({
       ...DEFAULT_TEACHER_PROFILE,

@@ -2,6 +2,8 @@ import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import LoginPage from '../pages/LoginPage.jsx';
 
+const StudentShellLayout = lazy(() => import('../layouts/StudentShellLayout.jsx'));
+const TeacherShellLayout = lazy(() => import('../layouts/TeacherShellLayout.jsx'));
 const StudentShellPage = lazy(() => import('../pages/StudentShellPage.jsx'));
 const TeacherShellPage = lazy(() => import('../pages/TeacherShellPage.jsx'));
 
@@ -16,10 +18,14 @@ export default function AppRoutes() {
         <Route path="/login" element={<LoginPage />} />
 
         {/* Student domain */}
-        <Route path="/aluno/*" element={<StudentShellPage />} />
+        <Route path="/aluno" element={<StudentShellLayout />}>
+          <Route index element={<StudentShellPage />} />
+        </Route>
 
         {/* Teacher domain */}
-        <Route path="/professor/*" element={<TeacherShellPage />} />
+        <Route path="/professor" element={<TeacherShellLayout />}>
+          <Route index element={<TeacherShellPage />} />
+        </Route>
 
         {/* Legacy module deep-links → redirect to shell query-param */}
         <Route path="/modulos/aprovacao-fuvest"  element={<Navigate to="/aluno?view=aprovacao-fuvest"  replace />} />

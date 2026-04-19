@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useRef, useState, createContext, useContext } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState, createContext, useContext } from 'react';
 import { 
   Home, Activity, Calendar, Clock, BookOpen, RotateCcw, 
   CheckSquare, TrendingUp, Menu, X, Bell, Zap, Play, Search,
@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { AccountHelpModal, AccountSettingsModal } from '../../components/ProfileActionPanels.jsx';
 import { RaioXSection, MentoriaView } from '../../components/StudentFeatures.jsx';
+import { getStudentNotifications } from '../../services/student.js';
+import { useAppStore } from '../../store/index.js';
 
 const CalendarManagerView = lazy(() => import('./CalendarView.jsx'));
 const EditableScheduleView = lazy(() => import('./ScheduleView.jsx'));
@@ -55,36 +57,6 @@ const simuladosData = [
   { id: 3, name: 'FUVEST 2025 - 1ª Fase', date: '08 Mar 2026', acertos: 51, total: 90, level: 'average', time: '4h 00m' },
 ];
 
-const INITIAL_STUDENT_NOTIFICATIONS = [
-  {
-    id: 1,
-    title: 'Revisão agendada para hoje',
-    text: 'Sua revisão de Biologia sobre Ecologia vence às 19h.',
-    time: 'Agora',
-    type: 'warning',
-    unread: true,
-    icon: Clock3,
-  },
-  {
-    id: 2,
-    title: 'Tutoria com IA liberada',
-    text: 'Seu tutor já pode montar um plano para o próximo simulado.',
-    time: 'Há 1h',
-    type: 'success',
-    unread: true,
-    icon: CheckCircle2,
-  },
-  {
-    id: 3,
-    title: 'Prazo importante',
-    text: 'As inscrições do ENEM entram na janela de atenção nesta semana.',
-    time: 'Ontem',
-    type: 'danger',
-    unread: false,
-    icon: AlertCircle,
-  },
-];
-
 const diagnosticData = [
   { 
     area: 'Matemática e Suas Tecnologias', 
@@ -129,6 +101,77 @@ const getFirstName = (name = '') => {
 };
 
 const getNameInitial = (name = '') => getFirstName(name).charAt(0).toUpperCase();
+
+const NOTIFICATION_ICONS = {
+  danger: AlertCircle,
+  warning: Clock3,
+  success: CheckCircle2,
+  info: Bell,
+};
+
+const getNotificationColorClass = (priority) => {
+  if (priority === 'danger') {
+    return 'bg-red-50 text-red-500';
+  }
+
+  if (priority === 'warning') {
+    return 'bg-orange-50 text-orange-500';
+  }
+
+  if (priority === 'success') {
+    return 'bg-teal-50 text-teal-500';
+  }
+
+  return 'bg-blue-50 text-blue-500';
+};
+
+const formatNotificationTime = (createdAt) => {
+  const notificationDate = new Date(createdAt);
+
+  if (Number.isNaN(notificationDate.getTime())) {
+    return 'Agora';
+  }
+
+  const diffMinutes = Math.max(0, Math.round((Date.now() - notificationDate.getTime()) / 60000));
+
+  if (diffMinutes < 1) {
+    return 'Agora';
+  }
+
+  if (diffMinutes < 60) {
+    return `Há ${diffMinutes} min`;
+  }
+
+  const diffHours = Math.round(diffMinutes / 60);
+
+  if (diffHours < 24) {
+    return `Há ${diffHours}h`;
+  }
+
+  const diffDays = Math.round(diffHours / 24);
+
+  if (diffDays === 1) {
+    return 'Ontem';
+  }
+
+  if (diffDays < 7) {
+    return `Há ${diffDays} dias`;
+  }
+
+  return notificationDate.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: 'short',
+  });
+};
+
+const mapNotificationToItem = (notification) => ({
+  ...notification,
+  icon: NOTIFICATION_ICONS[notification.priority] || Bell,
+  text: notification.body,
+  time: formatNotificationTime(notification.createdAt),
+  unread: !notification.read,
+});
+
 const VIEW_TITLES = {
   dashboard: 'Início',
   'raio-x': 'Raio-X',
@@ -160,8 +203,9 @@ const AppProvider = ({ children, initialView = 'dashboard', session = null, onVi
   const hiddenViews = getHiddenStudentViews(session);
   const hiddenViewsKey = hiddenViews.join('|');
   const [currentView, setCurrentView] = useState(() => sanitizeStudentView(initialView, hiddenViews));
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState(() => buildStudentUser(session));
+  const sidebarOpen = useAppStore((state) => state.studentSidebarOpen);
+  const setSidebarOpen = useAppStore((state) => state.setStudentSidebarOpen);
 
   useEffect(() => {
     setCurrentView(sanitizeStudentView(initialView, hiddenViews));
@@ -816,7 +860,9 @@ const Layout = ({ onLogout, externalViews = {} }) => {
     SupportNetworkView,
   } = externalViews;
   const isImmersiveView = IMMERSIVE_VIEWS.has(currentView);
-  const [notifications, setNotifications] = useState(INITIAL_STUDENT_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState([]);
+  const [notificationsStatus, setNotificationsStatus] = useState('loading');
+  const [notificationsError, setNotificationsError] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -826,19 +872,39 @@ const Layout = ({ onLogout, externalViews = {} }) => {
   const notificationsDropdownRef = useRef(null);
   const profileDropdownRef = useRef(null);
   const animTimers = useRef([]);
-  const unreadNotificationsCount = notifications.filter((notification) => notification.unread).length;
+  const notificationItems = notifications.map(mapNotificationToItem);
+  const unreadNotificationsCount = notificationItems.filter((notification) => notification.unread).length;
+
+  const loadNotifications = useCallback(async () => {
+    setNotificationsStatus('loading');
+    setNotificationsError('');
+
+    try {
+      const nextNotifications = await getStudentNotifications();
+      setNotifications(nextNotifications);
+      setNotificationsStatus('success');
+    } catch (error) {
+      setNotifications([]);
+      setNotificationsStatus('error');
+      setNotificationsError(error.message || 'Não foi possível carregar as notificações.');
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
 
   const markNotificationAsRead = (notificationId) => {
     setNotifications((previousNotifications) =>
       previousNotifications.map((notification) =>
-        notification.id === notificationId ? { ...notification, unread: false } : notification
+        notification.id === notificationId ? { ...notification, read: true } : notification
       )
     );
   };
 
   const markAllNotificationsAsRead = () => {
-    if (notifAnimPhase !== 'idle') return;
-    const unread = notifications.filter((n) => n.unread);
+    if (notifAnimPhase !== 'idle' || notificationsStatus !== 'success') return;
+    const unread = notifications.filter((notification) => !notification.read);
     if (!unread.length) return;
 
     animTimers.current.forEach(clearTimeout);
@@ -856,7 +922,7 @@ const Layout = ({ onLogout, externalViews = {} }) => {
     animTimers.current.push(
       setTimeout(() => {
         setNotifAnimPhase('done');
-        setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+        setNotifications((prev) => prev.map((notification) => ({ ...notification, read: true })));
       }, doneDelay)
     );
     animTimers.current.push(
@@ -966,26 +1032,65 @@ const Layout = ({ onLogout, externalViews = {} }) => {
                     <div>
                       <h4 className="font-bold text-slate-800">Notificações</h4>
                       <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mt-1">
-                        {unreadNotificationsCount > 0 ? `${unreadNotificationsCount} nova(s)` : 'Tudo em dia'}
+                        {notificationsStatus === 'loading'
+                          ? 'Carregando'
+                          : notificationsStatus === 'error'
+                            ? 'Falha ao carregar'
+                            : unreadNotificationsCount > 0
+                              ? `${unreadNotificationsCount} nova(s)`
+                              : 'Tudo em dia'}
                       </p>
                     </div>
                     <button
                       onClick={markAllNotificationsAsRead}
                       className="text-xs font-semibold text-blue-600 hover:text-blue-700 disabled:text-slate-300"
-                      disabled={unreadNotificationsCount === 0 || notifAnimPhase !== 'idle'}
+                      disabled={notificationsStatus !== 'success' || unreadNotificationsCount === 0 || notifAnimPhase !== 'idle'}
                     >
                       {notifAnimPhase === 'striking' ? 'Marcando…' : 'Marcar como lidas'}
                     </button>
                   </div>
                   <div className="max-h-[320px] overflow-y-auto divide-y divide-slate-100">
-                    {notifAnimPhase === 'done' ? (
+                    {notificationsStatus === 'loading' ? (
+                      <div className="space-y-3 p-4">
+                        {[0, 1, 2].map((placeholder) => (
+                          <div key={placeholder} className="animate-pulse rounded-2xl border border-slate-100 p-4">
+                            <div className="flex items-start gap-3">
+                              <div className="h-8 w-8 rounded-full bg-slate-200 flex-shrink-0" />
+                              <div className="flex-1 space-y-2">
+                                <div className="h-3 w-32 rounded-full bg-slate-200" />
+                                <div className="h-2 w-full rounded-full bg-slate-100" />
+                                <div className="h-2 w-20 rounded-full bg-slate-100" />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : notificationsStatus === 'error' ? (
+                      <div className="flex flex-col items-center justify-center py-10 px-5 text-center">
+                        <AlertCircle size={40} className="text-red-500" />
+                        <p className="mt-3 font-bold text-slate-800">Não foi possível carregar.</p>
+                        <p className="mt-1 text-sm text-slate-500">{notificationsError}</p>
+                        <button
+                          onClick={loadNotifications}
+                          className="mt-4 rounded-xl bg-blue-900 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 transition-colors"
+                        >
+                          Tentar novamente
+                        </button>
+                      </div>
+                    ) : notifAnimPhase === 'done' ? (
                       <div className="flex flex-col items-center justify-center py-10 px-4 animate-in fade-in zoom-in-95 duration-500">
                         <CheckCircle2 size={52} className="text-green-500" />
                         <p className="mt-3 font-bold text-slate-800">Tudo limpo!</p>
                         <p className="text-sm text-slate-500 mt-1 text-center">Nenhuma notificação pendente.</p>
                       </div>
+                    ) : notificationItems.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-10 px-4">
+                        <Bell size={40} className="text-slate-300" />
+                        <p className="mt-3 font-bold text-slate-800">Nenhuma notificação.</p>
+                        <p className="mt-1 text-sm text-slate-500 text-center">Quando algo novo acontecer, você verá por aqui.</p>
+                      </div>
                     ) : (
-                      notifications.map((notification) => {
+                      notificationItems.map((notification) => {
                         const isStruck = struckIds.has(notification.id);
                         return (
                           <button
@@ -1000,13 +1105,7 @@ const Layout = ({ onLogout, externalViews = {} }) => {
                             }`}
                           >
                             <div
-                              className={`p-2 rounded-full h-fit flex-shrink-0 ${
-                                notification.type === 'danger'
-                                  ? 'bg-red-50 text-red-500'
-                                  : notification.type === 'warning'
-                                    ? 'bg-orange-50 text-orange-500'
-                                    : 'bg-teal-50 text-teal-500'
-                              }`}
+                              className={`p-2 rounded-full h-fit flex-shrink-0 ${getNotificationColorClass(notification.priority)}`}
                             >
                               <notification.icon size={16} />
                             </div>

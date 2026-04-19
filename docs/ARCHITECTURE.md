@@ -9,22 +9,24 @@ Reference document for system design. Update whenever changing shell structure, 
 The codebase remains in Sprint Arq because routing and state migration are still
 open, but the runtime drain from `legacy/` to `src/features/` is complete.
 There are no runtime imports from `legacy/` anywhere under `src/`.
+`docs/SPRINTS.md` is the operational source of truth for pending work only. This
+section keeps the architectural migration history plus the current open steps.
 
 | Step | Artefact | Status |
 |------|----------|--------|
 | SA-1.1 | `src/routes/AppRoutes.jsx` | ✅ Done |
-| SA-1.1 | `src/App.jsx` → provider host only | ✅ Done |
+| SA-1.1 | `src/App.jsx` → host for store bootstrap + routes | ✅ Done |
 | SA-1.2 | `src/main.jsx` → React 18 named imports | ✅ Done |
 | SA-1.3 | `src/features/auth/Login.jsx` (from `nova-tela-login.jsx`) | ✅ Done |
-| SA-1.4 | `StudentShellPage` + `TeacherShellPage` → `<Outlet />` | ⬜ Next |
+| SA-1.4 | `StudentShellPage` + `TeacherShellPage` → `<Outlet />` | ✅ Done |
 | SA-1.5 | legacy student shell → `src/features/student/StudentShell.jsx` | ✅ Done |
-| SA-2.1 | Zustand: `src/store/sessionSlice.js` + `uiSlice.js` | ⬜ |
+| SA-2.1 | Zustand: `src/store/sessionSlice.js` + `uiSlice.js` | ✅ Done |
 | SA-2.2 | `legacy/teacher-shell.jsx` → `src/features/teacher/TeacherShell.jsx` | ✅ Done |
 | SA-2.3 | AI modules → `src/features/ai-tools/` | ✅ Done |
 | SA-2.4 | Assessment modules → `src/features/assessments/` | ✅ Done |
 | SA-2.5 | Student modules → `src/features/student/` | ✅ Done |
 | SA-2.6 | Teacher modules → `src/features/teacher/` | ✅ Done |
-| SA-3.1 | `src/services/` layer setup | ⬜ |
+| SA-3.1 | `src/services/` layer setup | ✅ Done |
 | SA-3.2 | `src/store/` Zustand wiring | ⬜ |
 
 ---
@@ -41,15 +43,15 @@ src/
     teacher/            # TeacherShell.jsx + teacher-domain modules
     ai-tools/           # Tutoria.jsx, EssayReview.jsx, DiscursiveAI.jsx
     assessments/        # Simulados.jsx, TriSimulator.jsx, FuvestApproval.jsx
-  layouts/              # Shell layout skeletons (post SA-1.4)
+  layouts/              # Shell auth/session guards + <Outlet> context
   pages/                # Route entry points — thin orchestrators only
   routes/
     AppRoutes.jsx       # All <Routes> declarations ✅
-  store/                # Zustand slices
-  services/             # External API clients (OpenAI, Firebase, etc.)
+  store/                # Zustand slices + composed app store
+  services/             # API wrapper + domain clients
   lib/                  # demoSession.js, launchExperience.js, pageLoaders.js
   utils/                # Pure functions, no side-effects
-  App.jsx               # Provider host ✅
+  App.jsx               # Store bootstrap + routes host ✅
   main.jsx              # createRoot + BrowserRouter ✅
 ```
 
@@ -99,24 +101,24 @@ The naming map below documents the drained runtime files and their final homes.
 
 ```
 main.jsx  (BrowserRouter)
-  └── App.jsx  (provider host — future: Zustand <Provider> wraps here)
+  └── App.jsx  (StoreBootstrap + AppRoutes)
         └── routes/AppRoutes.jsx
-              ├── /  /login     → pages/LoginPage → features/auth/Login.jsx
-              ├── /aluno/*      → pages/StudentShellPage
-              │                   ├── reads session + sanitizes view query
-              │                   ├── syncs currentView back to ?view=
-              │                   ├── lazy-loads student / assessments / ai-tools modules
-              │                   └── features/student/StudentShell.jsx
-              └── /professor/*  → pages/TeacherShellPage
-                                  ├── reads session + sanitizes view query
-                                  ├── syncs currentView back to ?view=
-                                  └── features/teacher/TeacherShell.jsx
+              ├── /  /login      → pages/LoginPage → features/auth/Login.jsx
+              ├── /aluno         → layouts/StudentShellLayout.jsx
+              │                    └── pages/StudentShellPage.jsx
+              │                         ├── consumes outlet context
+              │                         ├── lazy-loads student / assessments / ai-tools modules
+              │                         └── features/student/StudentShell.jsx
+              └── /professor     → layouts/TeacherShellLayout.jsx
+                                   └── pages/TeacherShellPage.jsx
+                                        ├── consumes outlet context
+                                        └── features/teacher/TeacherShell.jsx
 ```
 
 Internal shell navigation does NOT use React Router — uses
 `AppContext.navigate(viewId)` in the student shell and
 `TeacherContext.navigate(viewId)` in the teacher shell. Both update
-`currentView`, which is synced to `?view=` by the wrapper page. The wrappers
+`currentView`, which is synced to `?view=` by the shell layout. The layouts
 also coerce invalid view ids to safe fallbacks (`dashboard` or `overview`).
 
 ---
@@ -125,12 +127,16 @@ also coerce invalid view ids to safe fallbacks (`dashboard` or `overview`).
 
 | File | Responsibility |
 |------|----------------|
-| `AppRoutes.jsx` | All `<Routes>` declarations. Lazy-imports shell pages. Handles `/modulos/*` legacy redirects. |
+| `AppRoutes.jsx` | All `<Routes>` declarations. Lazy-imports shell layouts/pages and handles `/modulos/*` legacy redirects. |
 
 ```jsx
-// Pattern: lazy page + wildcard route
+// Pattern: layout route + index page
+const StudentShellLayout = lazy(() => import('../layouts/StudentShellLayout.jsx'));
 const StudentShellPage = lazy(() => import('../pages/StudentShellPage.jsx'));
-<Route path="/aluno/*" element={<StudentShellPage />} />
+
+<Route path="/aluno" element={<StudentShellLayout />}>
+  <Route index element={<StudentShellPage />} />
+</Route>
 ```
 
 ---
@@ -189,14 +195,19 @@ const StudentShellPage = lazy(() => import('../pages/StudentShellPage.jsx'));
 | File | Responsibility |
 |------|----------------|
 | `main.jsx` | `createRoot` + `BrowserRouter` |
-| `App.jsx` | Provider host — renders `<AppRoutes />` only |
+| `App.jsx` | Renders `StoreBootstrap` + `<AppRoutes />` |
 | `routes/AppRoutes.jsx` | Declarative route config |
 | `pages/LoginPage.jsx` | Builds a demo session, short-circuits invalid student login, and navigates to the shell |
-| `pages/StudentShellPage.jsx` | Reads session + `?view=`, sanitizes invalid or hidden views, lazy-loads cross-slice student views, and injects them into `StudentShell.jsx` |
-| `pages/TeacherShellPage.jsx` | Reads session + `?view=`, sanitizes invalid views, and injects props into teacher shell |
+| `layouts/StudentShellLayout.jsx` | Validates student session, syncs `?view=`, and exposes outlet context |
+| `layouts/TeacherShellLayout.jsx` | Validates teacher session, syncs `?view=`, and exposes outlet context |
+| `pages/StudentShellPage.jsx` | Consumes outlet context, lazy-loads cross-slice student views, and injects them into `StudentShell.jsx` |
+| `pages/TeacherShellPage.jsx` | Consumes outlet context and injects props into teacher shell |
 | `lib/demoSession.js` | Session CRUD on configured Web Storage with TTL validation and student demo credential checks |
 | `lib/launchExperience.js` | Welcome destination per profile |
 | `lib/pageLoaders.js` | Shell chunk preload |
+| `store/index.js` | Composed Zustand store + `StoreBootstrap` |
+| `services/api.js` | Shared fetch wrapper with timeout and normalized errors |
+| `services/student.js` | Student-facing service calls, including notifications |
 | `components/ProfileActionPanels.jsx` | Settings + help modals (both profiles) |
 | `components/StudentFeatures.jsx` | `RaioXSection` + `MentoriaView` |
 
@@ -225,8 +236,8 @@ tutoria, mentoria, humor, rede-de-apoio
 4. persistDemoSession()     → runs only when session exists
 5. preloadShellPage()       → preloads shell chunk
 6. navigate()               → /aluno or /professor
-7. ShellPage                → getStoredDemoSession() + sanitized view
-8. StudentShellPage         → also injects the cross-slice lazy view map
+7. StudentShellLayout       → getStoredDemoSession() + sanitized view + outlet context
+8. StudentShellPage         → injects the cross-slice lazy view map
 ```
 
 Demo accounts (`demoSession.js` + `.env.local`):
@@ -271,7 +282,9 @@ interface TeacherContextValue {
 }
 ```
 
-Both contexts will be replaced by Zustand slices in SA-2.1.
+The contexts remain the shell orchestration surface for `currentView`,
+navigation, and user data. `sidebarOpen` is already sourced from Zustand.
+Full context replacement remains scoped to SA-3.2.
 
 ---
 
@@ -292,11 +305,20 @@ Named exports:
 
 ## Data strategy
 
-All mocked. Constants defined at top of consuming file (SCREAMING_SNAKE_CASE).
+The app now mixes mocked modules with an initial real-data integration via
+`src/services/`. Constants still live at the top of the consuming file while a
+module stays local-only.
+
+### Initial API contract
+
+The first live contract currently implemented is:
+
+| Endpoint | Response fields | Consumer |
+|----------|-----------------|----------|
+| `GET /student/notifications` | `id`, `title`, `body`, `createdAt`, `read`, `priority` | `features/student/StudentShell.jsx` via `services/student.js` |
 
 | Constant | Location | Target (Sprint SA-3) |
 |----------|----------|-----------------------|
-| `INITIAL_STUDENT_NOTIFICATIONS` | `features/student/StudentShell.jsx` | `services/notifications.js` |
 | `mockDashboard`, `booksData` | `features/student/StudentShell.jsx` | `services/student.js` |
 | `MOCK_MENTORS` | `features/student/Mentorship.jsx` | `services/mentors.js` |
 | `mockStudents` | `features/teacher/TeacherShell.jsx` | `services/teacher.js` |
@@ -308,9 +330,10 @@ All mocked. Constants defined at top of consuming file (SCREAMING_SNAKE_CASE).
 
 | Importing from | Allowed imports | Forbidden |
 |----------------|----------------|-----------|
-| `src/features/*` | `src/components/`, `src/lib/`, `src/store/` | `src/pages/`, other feature slices |
+| `src/features/*` | `src/components/`, `src/lib/`, `src/services/`, `src/store/` | `src/pages/`, other feature slices |
+| `src/layouts/` | `src/features/`, `src/lib/`, `src/store/` | `legacy/` |
 | `src/pages/` | `src/features/`, `src/components/`, `src/lib/` | `legacy/` |
-| `src/routes/` | `src/pages/` | — |
+| `src/routes/` | `src/layouts/`, `src/pages/` | — |
 | `src/components/` | `src/lib/` | `src/pages/`, `src/features/`, `legacy/` |
 
 **Relative paths by source location:**
@@ -319,8 +342,9 @@ All mocked. Constants defined at top of consuming file (SCREAMING_SNAKE_CASE).
 from src/features/auth/      →  ../../components/...   ../../lib/...
 from src/features/student/   →  ../../components/...   ../../lib/...
 from src/components/         →  ../lib/...
+from src/layouts/            →  ../features/...         ../lib/...  ../store/...
 from src/pages/              →  ../features/...         ../lib/...
-from src/routes/             →  ../pages/...
+from src/routes/             →  ../layouts/...          ../pages/...
 ```
 
 ---
