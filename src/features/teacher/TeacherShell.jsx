@@ -142,9 +142,9 @@ const TeacherProvider = ({ children, initialView = 'overview', session = null, o
     () => ({
       ...DEFAULT_TEACHER_PROFILE,
       ...(session?.name ? { name: session.name } : {}),
-      ...(session?.username ? { email: `${session.username}@sinapse.local` } : {}),
+      ...(session?.email ? { email: session.email } : {}),
     }),
-    [session?.name, session?.username]
+    [session?.email, session?.name]
   );
 
   useEffect(() => {

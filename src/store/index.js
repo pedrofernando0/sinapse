@@ -6,8 +6,3 @@ export const useAppStore = create((...args) => ({
   ...createSessionSlice(...args),
   ...createUiSlice(...args),
 }));
-
-export function StoreBootstrap() {
-  useAppStore((state) => state.profile);
-  return null;
-}

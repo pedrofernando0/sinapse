@@ -1,215 +1,258 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react'
 import {
-  Award,
-  BarChart2,
+  AlertCircle,
   CheckSquare,
   Clock,
   Edit2,
-  Minus,
+  Loader2,
   PlusCircle,
   Save,
-  Sparkles,
   Trash2,
   TrendingUp,
+  Trophy,
   XCircle,
-} from 'lucide-react';
+} from 'lucide-react'
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  Radar,
-} from 'recharts';
+  deleteStudentMockExam,
+  getStudentMockExams,
+  saveStudentMockExam,
+} from '../../services/student.js'
 
-const RADAR_DATA = [
-  { subject: 'Matemática', score: 72 },
-  { subject: 'Humanas', score: 65 },
-  { subject: 'Linguagens', score: 80 },
-  { subject: 'Natureza', score: 58 },
-];
+const getTodayInput = () => new Date().toISOString().split('T')[0]
 
-const LineTooltip = ({ active, payload }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg">
-      <p className="text-sm font-black text-slate-800">{payload[0].value}%</p>
-      <p className="text-[11px] font-semibold text-slate-500">{payload[0].payload.name}</p>
-    </div>
-  );
-};
-
-const INITIAL_SIMULADOS = [
-  { id: 1, name: 'ENEM 2024 - Dia 1', date: '2026-02-15', acertos: 72, total: 90, level: 'good', time: '04:15' },
-  { id: 2, name: 'ENEM 2024 - Dia 2', date: '2026-02-22', acertos: 60, total: 90, level: 'average', time: '04:50' },
-  { id: 3, name: 'FUVEST 2025 - 1ª Fase', date: '2026-03-08', acertos: 38, total: 90, level: 'bad', time: '04:00' },
-];
-
-const getTodayInput = () => new Date().toISOString().split('T')[0];
+const EMPTY_FORM = {
+  acertos: '',
+  date: getTodayInput(),
+  name: '',
+  time: '',
+  total: '',
+}
 
 const Card = ({ children, className = '' }) => (
   <div className={`rounded-2xl border border-slate-200/60 bg-white/80 p-6 shadow-sm backdrop-blur-md ${className}`}>
     {children}
   </div>
-);
+)
 
-const EMPTY_FORM = {
-  name: '',
-  date: getTodayInput(),
-  total: '',
-  acertos: '',
-  time: '',
-};
+const formatLongDuration = (value = '00:00') => {
+  const [hours = '00', minutes = '00'] = String(value).split(':')
+  return `${hours}h${minutes}m`
+}
+
+const getExamLevel = ({ acertos, total }) => {
+  const percentage = Number(total) > 0 ? Number(acertos) / Number(total) : 0
+
+  if (percentage >= 0.7) {
+    return 'good'
+  }
+
+  if (percentage >= 0.5) {
+    return 'average'
+  }
+
+  return 'bad'
+}
+
+const getLevelBadge = (level) => {
+  if (level === 'good') {
+    return 'bg-teal-50 text-teal-500'
+  }
+
+  if (level === 'average') {
+    return 'bg-orange-50 text-orange-500'
+  }
+
+  return 'bg-red-50 text-red-500'
+}
+
+const getLevelLabel = (level) => {
+  if (level === 'good') {
+    return 'Bom'
+  }
+
+  if (level === 'average') {
+    return 'Estavel'
+  }
+
+  return 'Atencao'
+}
 
 export default function Simulados() {
-  const [simulados, setSimulados] = useState(INITIAL_SIMULADOS);
-  const [editingId, setEditingId] = useState(null);
-  const [isFormVisible, setIsFormVisible] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [simulados, setSimulados] = useState([])
+  const [status, setStatus] = useState('loading')
+  const [errorMessage, setErrorMessage] = useState('')
+  const [editingId, setEditingId] = useState(null)
+  const [isFormVisible, setIsFormVisible] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [form, setForm] = useState(EMPTY_FORM)
+
+  const loadSimulados = async () => {
+    setStatus('loading')
+    setErrorMessage('')
+
+    try {
+      const response = await getStudentMockExams()
+      setSimulados(response)
+      setStatus('success')
+    } catch (error) {
+      setErrorMessage(error.message || 'Nao foi possivel carregar os simulados.')
+      setStatus('error')
+    }
+  }
+
+  useEffect(() => {
+    loadSimulados()
+  }, [])
 
   const metrics = useMemo(() => {
     if (simulados.length === 0) {
       return {
-        avgPercentage: 0,
-        totalExams: 0,
-        trend: 'neutral',
+        averageDuration: '00h00m',
+        averageScore: 0,
         bestScore: 0,
-        avgTimeStr: '00h00m',
-      };
+        totalExams: 0,
+      }
     }
 
-    let totalAcertos = 0;
-    let totalQuestoes = 0;
-    let bestScore = 0;
-    let totalMinutes = 0;
+    const totals = simulados.reduce(
+      (accumulator, exam) => {
+        const [hours = '0', minutes = '0'] = String(exam.time).split(':')
 
-    simulados.forEach((simulado) => {
-      totalAcertos += Number(simulado.acertos);
-      totalQuestoes += Number(simulado.total);
-
-      const score = Math.round((Number(simulado.acertos) / Number(simulado.total)) * 100);
-
-      if (score > bestScore) {
-        bestScore = score;
+        return {
+          correctAnswers: accumulator.correctAnswers + Number(exam.acertos),
+          durationMinutes:
+            accumulator.durationMinutes + Number(hours) * 60 + Number(minutes),
+          totalQuestions: accumulator.totalQuestions + Number(exam.total),
+        }
+      },
+      {
+        correctAnswers: 0,
+        durationMinutes: 0,
+        totalQuestions: 0,
       }
+    )
 
-      const [hours = '0', minutes = '0'] = String(simulado.time).split(':');
-      totalMinutes += Number(hours) * 60 + Number(minutes);
-    });
-
-    const avgPercentage =
-      totalQuestoes > 0 ? Math.round((totalAcertos / totalQuestoes) * 100) : 0;
-    const avgMins = Math.round(totalMinutes / simulados.length);
+    const averageDurationMinutes = Math.round(
+      totals.durationMinutes / simulados.length
+    )
+    const averageScore =
+      totals.totalQuestions > 0
+        ? Math.round((totals.correctAnswers / totals.totalQuestions) * 100)
+        : 0
+    const bestScore = Math.max(
+      ...simulados.map((exam) =>
+        Math.round((Number(exam.acertos) / Number(exam.total)) * 100)
+      )
+    )
 
     return {
-      avgPercentage,
-      totalExams: simulados.length,
-      trend: avgPercentage >= 70 ? 'up' : avgPercentage >= 50 ? 'neutral' : 'down',
-      bestScore,
-      avgTimeStr: `${String(Math.floor(avgMins / 60)).padStart(2, '0')}h${String(
-        avgMins % 60,
+      averageDuration: `${String(Math.floor(averageDurationMinutes / 60)).padStart(2, '0')}h${String(
+        averageDurationMinutes % 60
       ).padStart(2, '0')}m`,
-    };
-  }, [simulados]);
+      averageScore,
+      bestScore,
+      totalExams: simulados.length,
+    }
+  }, [simulados])
 
-  const chartData = useMemo(
-    () =>
-      [...simulados]
-        .sort((a, b) => new Date(a.date) - new Date(b.date))
-        .map((s) => ({
-          name: s.name.length > 14 ? `${s.name.substring(0, 14)}…` : s.name,
-          score: Math.round((s.acertos / s.total) * 100),
-        })),
-    [simulados],
-  );
-
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-    setForm((currentForm) => ({ ...currentForm, [name]: value }));
-  };
+  const handleChange = ({ target: { name, value } }) => {
+    setForm((currentForm) => ({
+      ...currentForm,
+      [name]: value,
+    }))
+  }
 
   const resetForm = () => {
-    setForm(EMPTY_FORM);
-    setEditingId(null);
-    setIsFormVisible(false);
-  };
+    setEditingId(null)
+    setForm(EMPTY_FORM)
+    setIsFormVisible(false)
+  }
 
-  const handleEdit = (simulado) => {
-    setForm(simulado);
-    setEditingId(simulado.id);
-    setIsFormVisible(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  const handleEdit = (exam) => {
+    setEditingId(exam.id)
+    setForm({
+      acertos: String(exam.acertos),
+      date: exam.date,
+      name: exam.name,
+      time: exam.time,
+      total: String(exam.total),
+    })
+    setIsFormVisible(true)
+  }
 
-  const handleDelete = (id) => {
-    if (window.confirm('Tem certeza que deseja apagar este simulado?')) {
-      setSimulados((currentSimulados) =>
-        currentSimulados.filter((simulado) => simulado.id !== id),
-      );
+  const handleDelete = async (examId) => {
+    if (!window.confirm('Tem certeza que deseja apagar este simulado?')) {
+      return
     }
-  };
 
-  const handleSubmit = (event) => {
-    event.preventDefault();
+    try {
+      await deleteStudentMockExam(examId)
+      setSimulados((currentSimulados) =>
+        currentSimulados.filter((exam) => exam.id !== examId)
+      )
+    } catch (error) {
+      setErrorMessage(error.message || 'Nao foi possivel excluir o simulado.')
+    }
+  }
+
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+
+    if (!form.name.trim()) {
+      return
+    }
 
     if (Number(form.acertos) > Number(form.total)) {
-      alert('O número de acertos não pode ser maior que o total de questões!');
-      return;
+      window.alert('O numero de acertos nao pode ser maior que o total de questoes!')
+      return
     }
 
-    const percentage = Number(form.acertos) / Number(form.total);
-    let level = 'bad';
+    setIsSaving(true)
 
-    if (percentage >= 0.7) level = 'good';
-    else if (percentage >= 0.5) level = 'average';
+    try {
+      const savedExam = await saveStudentMockExam({
+        ...form,
+        id: editingId,
+      })
 
-    const newExam = {
-      ...form,
-      id: editingId || Date.now(),
-      acertos: Number(form.acertos),
-      total: Number(form.total),
-      level,
-    };
+      setSimulados((currentSimulados) => {
+        if (editingId) {
+          return currentSimulados.map((exam) =>
+            exam.id === editingId ? savedExam : exam
+          )
+        }
 
-    if (editingId) {
-      setSimulados((currentSimulados) =>
-        currentSimulados.map((simulado) =>
-          simulado.id === editingId ? newExam : simulado,
-        ),
-      );
-    } else {
-      setSimulados((currentSimulados) =>
-        [newExam, ...currentSimulados].sort(
+        return [...currentSimulados, savedExam].sort(
           (firstExam, secondExam) =>
-            new Date(secondExam.date) - new Date(firstExam.date),
-        ),
-      );
-    }
+            new Date(secondExam.date) - new Date(firstExam.date)
+        )
+      })
 
-    resetForm();
-  };
+      resetForm()
+    } catch (error) {
+      setErrorMessage(error.message || 'Nao foi possivel salvar o simulado.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="mb-6 flex items-end justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">Simulados e métricas</h2>
+          <h2 className="text-2xl font-bold text-slate-800">Simulados e metricas</h2>
           <p className="mt-1 text-slate-500">
-            Cadastre seus resultados e acompanhe sua evolução.
+            Cadastre seus resultados e acompanhe sua evolucao.
           </p>
         </div>
         {!isFormVisible ? (
           <button
+            type="button"
             onClick={() => setIsFormVisible(true)}
             className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 font-bold text-white shadow-sm transition-colors hover:bg-blue-700"
           >
             <PlusCircle size={20} />
-            <span className="hidden sm:inline">Novo resultado</span>
+            Novo resultado
           </button>
         ) : null}
       </div>
@@ -218,154 +261,175 @@ export default function Simulados() {
         <div className="space-y-6 lg:col-span-2">
           {isFormVisible ? (
             <Card className="border-blue-200 bg-gradient-to-br from-white to-blue-50/50 shadow-md">
-              <div className="mb-6 flex items-center justify-between">
-                <h3 className="flex items-center gap-2 text-lg font-bold text-slate-800">
-                  {editingId ? (
-                    <Edit2 size={20} className="text-blue-600" />
-                  ) : (
-                    <PlusCircle size={20} className="text-blue-600" />
-                  )}
-                  {editingId ? 'Editar resultado' : 'Cadastrar simulado'}
-                </h3>
-                <button
-                  onClick={resetForm}
-                  className="text-slate-400 transition-colors hover:text-red-500"
-                >
-                  <XCircle size={24} />
-                </button>
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold uppercase text-slate-500">
+              <form className="space-y-4" onSubmit={handleSubmit}>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2 md:col-span-2">
+                    <label htmlFor="mock-exam-name" className="text-sm font-bold text-slate-700">
                       Nome do simulado
                     </label>
                     <input
-                      type="text"
-                      required
+                      id="mock-exam-name"
                       name="name"
                       value={form.name}
                       onChange={handleChange}
-                      placeholder="Ex: FUVEST 1ª Fase"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition-colors focus:border-blue-400"
+                      placeholder="ENEM 2024 - Dia 1"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold uppercase text-slate-500">Data</label>
+
+                  <div className="space-y-2">
+                    <label htmlFor="mock-exam-date" className="text-sm font-bold text-slate-700">
+                      Data
+                    </label>
                     <input
+                      id="mock-exam-date"
                       type="date"
-                      required
                       name="date"
                       value={form.date}
                       onChange={handleChange}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-slate-700 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition-colors focus:border-blue-400"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold uppercase text-slate-500">
-                      Total de questões
+
+                  <div className="space-y-2">
+                    <label htmlFor="mock-exam-time" className="text-sm font-bold text-slate-700">
+                      Tempo
                     </label>
                     <input
-                      type="number"
-                      min="1"
-                      required
-                      name="total"
-                      value={form.total}
-                      onChange={handleChange}
-                      placeholder="Ex: 90"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold uppercase text-slate-500">
-                      Acertos
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      required
-                      name="acertos"
-                      value={form.acertos}
-                      onChange={handleChange}
-                      placeholder="Ex: 65"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div className="space-y-1 md:col-span-2">
-                    <label className="text-xs font-bold uppercase text-slate-500">
-                      Tempo gasto (HH:MM)
-                    </label>
-                    <input
-                      type="text"
-                      required
+                      id="mock-exam-time"
                       name="time"
                       value={form.time}
                       onChange={handleChange}
-                      pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$"
-                      title="Formato de hora válido: HH:MM"
-                      placeholder="04:30"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition-colors focus:border-blue-400"
+                      placeholder="04:00"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="mock-exam-total" className="text-sm font-bold text-slate-700">
+                      Total de questoes
+                    </label>
+                    <input
+                      id="mock-exam-total"
+                      type="number"
+                      min="1"
+                      name="total"
+                      value={form.total}
+                      onChange={handleChange}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition-colors focus:border-blue-400"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="mock-exam-correct" className="text-sm font-bold text-slate-700">
+                      Acertos
+                    </label>
+                    <input
+                      id="mock-exam-correct"
+                      type="number"
+                      min="0"
+                      name="acertos"
+                      value={form.acertos}
+                      onChange={handleChange}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition-colors focus:border-blue-400"
                     />
                   </div>
                 </div>
 
-                <div className="mt-6 flex justify-end gap-3 border-t border-slate-100 pt-4">
+                <div className="flex flex-col gap-3 pt-2 sm:flex-row">
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-wait disabled:opacity-70"
+                  >
+                    {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                    Salvar resultado
+                  </button>
                   <button
                     type="button"
                     onClick={resetForm}
-                    className="rounded-xl px-5 py-2 font-bold text-slate-500 transition-colors hover:bg-slate-100"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
                   >
+                    <XCircle size={18} />
                     Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex items-center gap-2 rounded-xl bg-slate-800 px-5 py-2 font-bold text-white transition-colors hover:bg-slate-700"
-                  >
-                    <Save size={18} />
-                    {editingId ? 'Atualizar' : 'Salvar dados'}
                   </button>
                 </div>
               </form>
             </Card>
           ) : null}
 
-          <div className="space-y-4">
-            <h3 className="flex items-center gap-2 text-lg font-bold text-slate-800">
-              <CheckSquare size={20} className="text-slate-500" />
-              Histórico de resultados
-            </h3>
+          {status === 'loading' ? (
+            <Card className="flex items-center gap-3">
+              <Loader2 size={18} className="animate-spin text-blue-600" />
+              <p className="text-sm font-semibold text-slate-600">
+                Carregando simulados...
+              </p>
+            </Card>
+          ) : null}
 
-            {simulados.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-slate-500">
-                Nenhum simulado cadastrado ainda.
+          {status === 'error' ? (
+            <Card className="border-red-100 bg-red-50/70">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <AlertCircle size={20} className="mt-0.5 text-red-500" />
+                  <div>
+                    <h3 className="font-bold text-red-700">Nao foi possivel carregar os simulados</h3>
+                    <p className="mt-1 text-sm text-red-600">{errorMessage}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={loadSimulados}
+                  className="rounded-xl bg-white px-4 py-2 text-sm font-bold text-red-600 transition-colors hover:bg-red-100"
+                >
+                  Tentar novamente
+                </button>
               </div>
-            ) : (
-              simulados.map((simulado) => {
-                const formattedDate = new Date(simulado.date).toLocaleDateString('pt-BR', {
-                  timeZone: 'UTC',
-                });
-                const percentage = Math.round((simulado.acertos / simulado.total) * 100);
-                const ui =
-                  simulado.level === 'good'
-                    ? { color: 'text-teal-500', bg: 'bg-teal-50', label: 'Bom' }
-                    : simulado.level === 'average'
-                      ? { color: 'text-orange-500', bg: 'bg-orange-50', label: 'Médio' }
-                      : { color: 'text-red-500', bg: 'bg-red-50', label: 'Ruim' };
+            </Card>
+          ) : null}
+
+          {status === 'success' && simulados.length === 0 ? (
+            <Card className="text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-500">
+                <CheckSquare size={24} />
+              </div>
+              <h3 className="mt-4 text-lg font-bold text-slate-800">
+                Nenhum simulado cadastrado ainda.
+              </h3>
+              <p className="mt-2 text-sm text-slate-500">
+                Comece registrando seu primeiro resultado para acompanhar sua evolucao.
+              </p>
+            </Card>
+          ) : null}
+
+          {status === 'success' && simulados.length > 0 ? (
+            <div className="space-y-4">
+              <h3 className="flex items-center gap-2 text-lg font-bold text-slate-800">
+                <CheckSquare size={20} className="text-slate-500" />
+                Historico de resultados
+              </h3>
+
+              {simulados.map((exam) => {
+                const level = getExamLevel(exam)
+                const score = Number(exam.total) > 0
+                  ? Math.round((Number(exam.acertos) / Number(exam.total)) * 100)
+                  : 0
 
                 return (
                   <Card
-                    key={simulado.id}
+                    key={exam.id}
                     className="group flex flex-col justify-between gap-4 transition-colors hover:border-slate-300 sm:flex-row sm:items-center"
                   >
                     <div className="w-full flex-1">
                       <div className="mb-3 flex items-start justify-between">
                         <div>
-                          <h4 className="text-base font-bold text-slate-800">{simulado.name}</h4>
-                          <span className="text-xs font-bold text-slate-400">{formattedDate}</span>
+                          <h4 className="text-base font-bold text-slate-800">{exam.name}</h4>
+                          <span className="text-xs font-bold text-slate-400">
+                            {new Date(`${exam.date}T12:00:00`).toLocaleDateString('pt-BR')}
+                          </span>
                         </div>
-                        <span className={`rounded-md px-2 py-1 text-xs font-bold ${ui.bg} ${ui.color}`}>
-                          {ui.label}
+                        <span className={`rounded-md px-2 py-1 text-xs font-bold ${getLevelBadge(level)}`}>
+                          {getLevelLabel(level)}
                         </span>
                       </div>
 
@@ -375,9 +439,9 @@ export default function Simulados() {
                             Acertos
                           </p>
                           <p className="text-lg font-black text-slate-700">
-                            {simulado.acertos}{' '}
+                            {exam.acertos}{' '}
                             <span className="text-sm font-normal text-slate-400">
-                              / {simulado.total}
+                              / {exam.total}
                             </span>
                           </p>
                         </div>
@@ -385,212 +449,81 @@ export default function Simulados() {
                           <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             Taxa
                           </p>
-                          <p className={`text-lg font-black ${ui.color}`}>{percentage}%</p>
+                          <p className="text-lg font-black text-teal-500">{score}%</p>
                         </div>
                         <div>
                           <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             Tempo
                           </p>
-                          <p className="text-lg font-bold text-slate-600">{simulado.time}h</p>
+                          <p className="text-lg font-black text-slate-700">
+                            {formatLongDuration(exam.time)}
+                          </p>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex gap-2 border-t border-slate-100 pt-4 sm:flex-col sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
+                    <div className="flex gap-2 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
                       <button
-                        onClick={() => handleEdit(simulado)}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-lg p-2 text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600 sm:flex-none"
-                        title="Editar"
+                        type="button"
+                        aria-label="Editar simulado"
+                        onClick={() => handleEdit(exam)}
+                        className="rounded-lg p-2 text-slate-400 transition-all hover:bg-blue-50 hover:text-blue-600 active:scale-90"
                       >
                         <Edit2 size={18} />
                       </button>
                       <button
-                        onClick={() => handleDelete(simulado.id)}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-lg p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 sm:flex-none"
-                        title="Apagar"
+                        type="button"
+                        aria-label="Excluir simulado"
+                        onClick={() => handleDelete(exam.id)}
+                        className="rounded-lg p-2 text-slate-400 transition-all hover:bg-red-50 hover:text-red-600 active:scale-90"
                       >
                         <Trash2 size={18} />
                       </button>
                     </div>
                   </Card>
-                );
-              })
-            )}
-          </div>
+                )
+              })}
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-6">
-          <Card className="flex flex-col border-slate-200 bg-white shadow-md">
-            <div className="mb-8 flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-slate-800">
-                <BarChart2 size={18} className="text-blue-600" />
-                Performance global
-              </h3>
-              <span className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-1 text-[10px] font-bold text-slate-500">
-                {metrics.totalExams} exames
-              </span>
-            </div>
-
-            <div className="relative mb-8 flex justify-center">
-              <div className="relative flex h-40 w-40 items-center justify-center">
-                <svg className="h-full w-full -rotate-90 transform drop-shadow-sm">
-                  <circle
-                    cx="80"
-                    cy="80"
-                    r="70"
-                    className="stroke-current text-slate-100"
-                    strokeWidth="12"
-                    fill="transparent"
-                  />
-                  <circle
-                    cx="80"
-                    cy="80"
-                    r="70"
-                    className={`stroke-current transition-all duration-1000 ease-out ${
-                      metrics.avgPercentage >= 70
-                        ? 'text-teal-500'
-                        : metrics.avgPercentage >= 50
-                          ? 'text-blue-500'
-                          : 'text-rose-500'
-                    }`}
-                    strokeWidth="12"
-                    fill="transparent"
-                    strokeDasharray="439.8"
-                    strokeDashoffset={439.8 - (metrics.avgPercentage / 100) * 439.8}
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-5xl font-black tracking-tighter text-slate-800">
-                    {metrics.avgPercentage}
-                    <span className="text-2xl font-bold text-slate-400">%</span>
-                  </span>
-                  <span className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                    Média
-                  </span>
+          <Card>
+            <h3 className="mb-4 text-lg font-bold text-slate-800">Visao rapida</h3>
+            <div className="space-y-4">
+              <div className="rounded-2xl bg-blue-50 p-4">
+                <div className="flex items-center gap-2 text-blue-700">
+                  <TrendingUp size={18} />
+                  <span className="text-sm font-bold">Media geral</span>
                 </div>
-              </div>
-            </div>
-
-            <div className="mb-8 grid grid-cols-2 gap-4">
-              <div className="flex flex-col items-center rounded-2xl border border-slate-100 bg-slate-50 p-4 text-center transition-colors hover:bg-slate-100/50">
-                <Award size={20} className="mb-2 text-amber-500" />
-                <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Melhor marca
+                <p className="mt-2 text-3xl font-black text-blue-900">
+                  {metrics.averageScore}%
                 </p>
-                <p className="text-2xl font-black text-slate-800">{metrics.bestScore}%</p>
               </div>
-              <div className="flex flex-col items-center rounded-2xl border border-slate-100 bg-slate-50 p-4 text-center transition-colors hover:bg-slate-100/50">
-                <Clock size={20} className="mb-2 text-blue-500" />
-                <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Pace médio
+
+              <div className="rounded-2xl bg-teal-50 p-4">
+                <div className="flex items-center gap-2 text-teal-700">
+                  <Trophy size={18} />
+                  <span className="text-sm font-bold">Melhor resultado</span>
+                </div>
+                <p className="mt-2 text-3xl font-black text-teal-900">
+                  {metrics.bestScore}%
                 </p>
-                <p className="text-2xl font-black text-slate-800">{metrics.avgTimeStr}</p>
               </div>
-            </div>
 
-            <div className="border-t border-slate-100 pt-6">
-              <div className="mb-4 flex items-center justify-between">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  Evolução de notas
+              <div className="rounded-2xl bg-slate-100 p-4">
+                <div className="flex items-center gap-2 text-slate-600">
+                  <Clock size={18} />
+                  <span className="text-sm font-bold">Tempo medio</span>
+                </div>
+                <p className="mt-2 text-2xl font-black text-slate-800">
+                  {metrics.averageDuration}
                 </p>
-                {metrics.trend === 'up' ? (
-                  <TrendingUp size={16} className="text-teal-500" />
-                ) : metrics.trend === 'down' ? (
-                  <TrendingUp size={16} className="rotate-180 transform text-rose-500" />
-                ) : (
-                  <Minus size={16} className="text-slate-400" />
-                )}
               </div>
-
-              <ResponsiveContainer width="100%" height={110}>
-                <LineChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -28 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 9, fill: '#94a3b8', fontWeight: 600 }}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    domain={[0, 100]}
-                    tick={{ fontSize: 9, fill: '#94a3b8', fontWeight: 600 }}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v) => `${v}%`}
-                  />
-                  <Tooltip content={<LineTooltip />} />
-                  <Line
-                    type="monotone"
-                    dataKey="score"
-                    stroke="#3b82f6"
-                    strokeWidth={2.5}
-                    dot={{ fill: '#3b82f6', r: 4, strokeWidth: 2, stroke: '#fff' }}
-                    activeDot={{ r: 6, fill: '#2563eb' }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
             </div>
-          </Card>
-
-          <Card className="relative overflow-hidden border border-indigo-100 bg-gradient-to-br from-indigo-50 to-blue-50 shadow-sm">
-            <div className="pointer-events-none absolute -right-4 -top-4 rotate-12 text-indigo-500/10">
-              <Sparkles size={80} />
-            </div>
-            <div className="relative z-10">
-              <h4 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-indigo-900">
-                <Sparkles size={16} className="text-indigo-500" />
-                Inteligência de dados
-              </h4>
-              <p className="text-sm font-medium leading-relaxed text-indigo-900/80">
-                Seu rendimento atual sugere viabilidade. Reduzir{' '}
-                <strong className="mx-1 rounded border border-indigo-100 bg-white px-1.5 py-0.5 text-indigo-700 shadow-sm">
-                  15 min
-                </strong>
-                do pace fortalecerá sua vantagem competitiva.
-              </p>
-            </div>
-          </Card>
-
-          <Card className="border-slate-200 bg-white shadow-md">
-            <div className="mb-4 flex items-center gap-2">
-              <BarChart2 size={18} className="text-blue-600" />
-              <h3 className="text-sm font-bold uppercase tracking-widest text-slate-800">
-                Radar de áreas
-              </h3>
-            </div>
-            <p className="mb-4 text-xs font-medium text-slate-500">
-              Pontos fortes e vulnerabilidades por grande área do ENEM.
-            </p>
-            <ResponsiveContainer width="100%" height={200}>
-              <RadarChart cx="50%" cy="50%" outerRadius="70%" data={RADAR_DATA}>
-                <PolarGrid stroke="#e2e8f0" />
-                <PolarAngleAxis
-                  dataKey="subject"
-                  tick={{ fontSize: 10, fill: '#64748b', fontWeight: 700 }}
-                />
-                <Radar
-                  dataKey="score"
-                  stroke="#3b82f6"
-                  fill="#3b82f6"
-                  fillOpacity={0.15}
-                  strokeWidth={2}
-                  dot={{ fill: '#3b82f6', r: 3 }}
-                />
-                <Tooltip
-                  formatter={(value) => [`${value}%`, 'Aproveitamento']}
-                  contentStyle={{
-                    borderRadius: '12px',
-                    border: '1px solid #e2e8f0',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                  }}
-                />
-              </RadarChart>
-            </ResponsiveContainer>
           </Card>
         </div>
       </div>
     </div>
-  );
+  )
 }

@@ -48,10 +48,10 @@ src/
   routes/
     AppRoutes.jsx       # All <Routes> declarations ✅
   store/                # Zustand slices + composed app store
-  services/             # API wrapper + domain clients
-  lib/                  # demoSession.js, launchExperience.js, pageLoaders.js
+  services/             # Supabase auth + student domain clients
+  lib/                  # useAuth.js, launchExperience.js, pageLoaders.js, supabase/
   utils/                # Pure functions, no side-effects
-  App.jsx               # Store bootstrap + routes host ✅
+  App.jsx               # Auth bootstrap + routes host ✅
   main.jsx              # createRoot + BrowserRouter ✅
 ```
 
@@ -101,7 +101,7 @@ The naming map below documents the drained runtime files and their final homes.
 
 ```
 main.jsx  (BrowserRouter)
-  └── App.jsx  (StoreBootstrap + AppRoutes)
+  └── App.jsx  (AuthBootstrap + AppRoutes)
         └── routes/AppRoutes.jsx
               ├── /  /login      → pages/LoginPage → features/auth/Login.jsx
               ├── /aluno         → layouts/StudentShellLayout.jsx
@@ -147,9 +147,9 @@ const StudentShellPage = lazy(() => import('../pages/StudentShellPage.jsx'));
 
 | File | Exports | Description |
 |------|---------|-------------|
-| `Login.jsx` | `default Login` | Full login UI: profile selection, credentials form, loading ritual |
+| `Login.jsx` | `default Login` | Unified auth UI: profile selection, login, create account, password recovery, password reset |
 
-`Login` receives `onLogin({ profile, formData })` from `LoginPage`. Has no routing knowledge.
+`Login` receives `onLogin`, `onRegister`, `onRecoverPassword`, and `onResetPassword` from `LoginPage`. Has no shell routing knowledge.
 
 ### student/
 
@@ -195,19 +195,20 @@ const StudentShellPage = lazy(() => import('../pages/StudentShellPage.jsx'));
 | File | Responsibility |
 |------|----------------|
 | `main.jsx` | `createRoot` + `BrowserRouter` |
-| `App.jsx` | Renders `StoreBootstrap` + `<AppRoutes />` |
+| `App.jsx` | Renders `AuthBootstrap` + `<AppRoutes />` |
 | `routes/AppRoutes.jsx` | Declarative route config |
-| `pages/LoginPage.jsx` | Builds a demo session, short-circuits invalid student login, and navigates to the shell |
-| `layouts/StudentShellLayout.jsx` | Validates student session, syncs `?view=`, and exposes outlet context |
-| `layouts/TeacherShellLayout.jsx` | Validates teacher session, syncs `?view=`, and exposes outlet context |
+| `pages/LoginPage.jsx` | Orchestrates Supabase auth actions and redirects authenticated users to the right shell |
+| `layouts/StudentShellLayout.jsx` | Validates authenticated student session from Zustand, syncs `?view=`, and exposes outlet context |
+| `layouts/TeacherShellLayout.jsx` | Validates authenticated teacher session from Zustand, syncs `?view=`, and exposes outlet context |
 | `pages/StudentShellPage.jsx` | Consumes outlet context, lazy-loads cross-slice student views, and injects them into `StudentShell.jsx` |
 | `pages/TeacherShellPage.jsx` | Consumes outlet context and injects props into teacher shell |
-| `lib/demoSession.js` | Session CRUD on configured Web Storage with TTL validation and student demo credential checks |
+| `lib/useAuth.js` | Auth hook + bootstrap subscription for Supabase session state |
 | `lib/launchExperience.js` | Welcome destination per profile |
 | `lib/pageLoaders.js` | Shell chunk preload |
-| `store/index.js` | Composed Zustand store + `StoreBootstrap` |
-| `services/api.js` | Shared fetch wrapper with timeout and normalized errors |
-| `services/student.js` | Student-facing service calls, including notifications |
+| `lib/supabase/client.js` | Browser Supabase singleton |
+| `store/index.js` | Composed Zustand store |
+| `services/auth.js` | Direct Supabase Auth integration, demo alias resolution, recovery/reset helpers |
+| `services/student.js` | Direct Supabase CRUD for notifications, revisions, and mock exams |
 | `components/ProfileActionPanels.jsx` | Settings + help modals (both profiles) |
 | `components/StudentFeatures.jsx` | `RaioXSection` + `MentoriaView` |
 
@@ -227,30 +228,40 @@ tutoria, mentoria, humor, rede-de-apoio
 
 ---
 
-## Auth flow (demo)
+## Auth flow (Supabase)
 
 ```
-1. User: selects profile + credentials in features/auth/Login.jsx
-2. LoginPage.handleLogin({ profile, formData })
-3. buildDemoSession()       → session object or null
-4. persistDemoSession()     → runs only when session exists
-5. preloadShellPage()       → preloads shell chunk
-6. navigate()               → /aluno or /professor
-7. StudentShellLayout       → getStoredDemoSession() + sanitized view + outlet context
-8. StudentShellPage         → injects the cross-slice lazy view map
+1. App.jsx mounts AuthBootstrap
+2. AuthBootstrap subscribes to Supabase auth events and hydrates Zustand
+3. User selects profile in features/auth/Login.jsx
+4. LoginPage calls services/auth.js:
+   - loginWithCredentials()
+   - registerAccount()
+   - requestPasswordRecovery()
+   - updateUserPassword()
+5. services/auth.js resolves/ensures public.profiles row
+6. Zustand receives normalized shell session payload
+7. LoginPage preloads the destination shell and navigates to /aluno or /professor
+8. Shell layouts validate profile-specific access and expose outlet context
 ```
 
-Demo accounts (`demoSession.js` + `.env.local`):
+Demo shortcut:
 
-| User | Password | Profile | Restrictions |
-|------|----------|---------|--------------|
-| `VITE_DEMO_STUDENT_USERNAME` | `VITE_DEMO_STUDENT_PASSWORD` | student | `discursiva-ia` hidden |
-| `VITE_DEMO_POWER_USER_USERNAME` | `VITE_DEMO_POWER_USER_PASSWORD` | student | none |
-| any non-empty | any non-empty | teacher | none |
+| Alias visivel | Senha | Perfil selecionado | Conta real mapeada |
+|---------------|-------|--------------------|--------------------|
+| `pedro` | `pedro` | `aluno` | `demo.aluno.pedro@sinapse.app` |
+| `pedro` | `pedro` | `professor` | `demo.professor.pedro@sinapse.app` |
 
-If no student demo accounts are configured, the student shell falls back to
-accepting any non-empty credential pair in demo mode. Teacher demo remains open
-to any non-empty credentials.
+The shortcut is enabled only in local development or when `VITE_ENABLE_DEMO_SHORTCUT=true`.
+Production should keep the flag disabled.
+
+Supabase runtime assets:
+
+| Path | Responsibility |
+|------|----------------|
+| `supabase/migrations/20260419015808_auth_runtime_v1.sql` | Profiles, student tables, triggers, indexes, RLS policies |
+| `supabase/seed.sql` | Seeds student demo domain data after demo auth users exist |
+| `scripts/provision-demo-users.mjs` | Creates/updates the two demo auth users via Supabase Auth Admin |
 
 ---
 
