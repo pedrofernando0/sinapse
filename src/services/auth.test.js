@@ -1,21 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const signInWithPassword = vi.fn()
-const getSession = vi.fn()
+const apiRequest = vi.fn()
 const signOut = vi.fn()
-const maybeSingle = vi.fn()
-const eq = vi.fn(() => ({ maybeSingle }))
-const select = vi.fn(() => ({ eq }))
-const from = vi.fn(() => ({ select }))
+const updateUser = vi.fn()
+const onAuthStateChange = vi.fn(() => ({
+  data: {
+    subscription: {
+      unsubscribe: vi.fn(),
+    },
+  },
+}))
+
+vi.mock('./api.js', () => ({
+  apiRequest,
+}))
 
 vi.mock('../lib/supabase/client.js', () => ({
   createClient: () => ({
     auth: {
-      getSession,
-      signInWithPassword,
+      onAuthStateChange,
       signOut,
+      updateUser,
     },
-    from,
   }),
 }))
 
@@ -27,28 +33,25 @@ describe('auth service', () => {
   })
 
   it('keeps the typed demo shortcut password when resolving the mapped account', async () => {
-    signInWithPassword.mockResolvedValue({ error: null })
-    getSession.mockResolvedValue({
-      data: {
-        session: {
-          user: {
-            id: 'student-user-id',
-            email: 'demo.aluno.pedro@sinapse.app',
-            user_metadata: { full_name: 'Pedro Demo' },
-          },
-        },
+    apiRequest.mockResolvedValue({
+      authUser: {
+        email: 'demo.aluno.pedro@sinapse.app',
+        id: 'student-user-id',
       },
-      error: null,
-    })
-    maybeSingle.mockResolvedValue({
-      data: {
-        user_id: 'student-user-id',
+      profileRecord: {
         email: 'demo.aluno.pedro@sinapse.app',
         full_name: 'Pedro Demo',
-        role: 'aluno',
         hidden_student_views: [],
+        role: 'aluno',
+        user_id: 'student-user-id',
       },
-      error: null,
+      session: {
+        email: 'demo.aluno.pedro@sinapse.app',
+        hiddenStudentViews: [],
+        name: 'Pedro Demo',
+        profile: 'aluno',
+        userId: 'student-user-id',
+      },
     })
 
     const { loginWithCredentials } = await import('./auth.js')
@@ -61,11 +64,15 @@ describe('auth service', () => {
       profile: 'aluno',
     })
 
-    expect(signInWithPassword).toHaveBeenCalledWith({
-      email: 'demo.aluno.pedro@sinapse.app',
-      password: 'pedro',
+    expect(apiRequest).toHaveBeenCalledWith({
+      body: {
+        email: 'demo.aluno.pedro@sinapse.app',
+        password: 'pedro',
+        profile: 'aluno',
+      },
+      method: 'POST',
+      path: '/auth/login',
     })
-    expect(signOut).not.toHaveBeenCalled()
     expect(authState.session).toMatchObject({
       email: 'demo.aluno.pedro@sinapse.app',
       profile: 'aluno',

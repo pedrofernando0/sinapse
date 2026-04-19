@@ -1,144 +1,139 @@
 # Contributing — Sinapse
 
-Guia para contribuições humanas ao repositório. Se você é um agente de IA, leia
-[`AGENTS.md`](AGENTS.md) antes deste documento.
-
----
+Guia de contribuição humana para o repositório. Se você estiver operando como
+agente, leia [`AGENTS.md`](AGENTS.md) antes deste documento.
 
 ## Antes de começar
 
-Leia os documentos abaixo na ordem indicada:
+Estes arquivos formam o contexto mínimo do projeto.
 
 | Ordem | Arquivo | Por que ler |
-|-------|---------|------------|
-| 1 | [`CLAUDE.md`](CLAUDE.md) | Contexto rápido do projeto, comandos, padrões |
-| 2 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Como o sistema está organizado |
-| 3 | [`docs/SPRINTS.md`](docs/SPRINTS.md) | O que está sendo trabalhado agora |
-| 4 | [`AGENTS.md`](AGENTS.md) | Paradigmas técnicos de intervenção (vale para humanos também) |
-
----
+|-------|---------|-------------|
+| 1 | [`CLAUDE.md`](CLAUDE.md) | setup rápido, arquitetura e comandos |
+| 2 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | camadas, runtime e mapa de migração |
+| 3 | [`docs/SPRINTS.md`](docs/SPRINTS.md) | backlog ainda pendente |
+| 4 | [`AGENTS.md`](AGENTS.md) | regras prescritivas de intervenção |
 
 ## Setup de desenvolvimento
 
+O setup mínimo do frontend é este:
+
 ```bash
-npm install      # instala dependências
-npm run dev      # inicia dev server em http://localhost:5173
-npm run build    # valida o build de produção
-npm run preview  # preview local do build
+cp .env.example .env.local
+npm install
+npm run dev
 ```
 
-Contas de demonstração para testar o produto:
+Antes de abrir PR, rode também:
 
-| Usuário | Senha | Perfil |
-|---------|-------|--------|
-| `VITE_DEMO_STUDENT_USERNAME` | `VITE_DEMO_STUDENT_PASSWORD` | Aluno |
-| `VITE_DEMO_POWER_USER_USERNAME` | `VITE_DEMO_POWER_USER_PASSWORD` | Aluno |
-| qualquer valor não vazio | qualquer valor não vazio | Professor |
+```bash
+npm run test
+npm run build
+```
 
-Se você não configurar contas demo seedadas para o aluno em `.env.local`, o
-shell do aluno também continua funcional em modo demo com qualquer combinação
-não vazia.
+Importante: `npm run dev` sobe apenas o frontend Vite. Para testar fluxos que
+dependem de `/api/*`, use um destes modos:
 
----
+1. defina `VITE_API_BASE_URL` apontando para um deploy existente;
+2. rode o projeto com `vercel dev`, caso tenha o Vercel CLI instalado.
+
+O atalho demo `pedro/pedro` funciona em `DEV` ou quando
+`VITE_ENABLE_DEMO_SHORTCUT=true`.
+
+Se você quiser provisionar as contas demo no projeto Supabase, execute:
+
+```bash
+npm run supabase:provision-demo
+```
+
+Esse script usa `SUPABASE_SERVICE_ROLE_KEY`.
 
 ## Workflow de contribuição
 
-1. **Crie uma branch** a partir de `main`:
+Siga este fluxo para manter o histórico limpo.
+
+1. Crie uma branch a partir de `main`.
+
    ```bash
    git checkout -b feat/nome-da-feature
    ```
 
-2. **Classifique a mudança** usando a taxonomia em `AGENTS.md § 1. Taxonomia de intervenções`
-   antes de começar a escrever código.
-
-3. **Implemente** seguindo os padrões de `AGENTS.md`.
-
-4. **Valide** o build:
-   ```bash
-   npm run build   # deve terminar sem erros
-   ```
-
-5. **Atualize a documentação** se necessário (ver seção abaixo).
-
-6. **Abra um pull request** com a checklist preenchida.
-
----
+2. Classifique a mudança pela taxonomia descrita em `AGENTS.md`.
+3. Implemente a mudança no shell, serviço ou camada corretos.
+4. Rode `npm run test` e `npm run build`.
+5. Atualize a documentação pertinente.
+6. Abra o pull request com a checklist preenchida.
 
 ## Quando atualizar documentação
 
-| Mudança no código | Documentos a atualizar |
-|-------------------|----------------------|
-| Nova view no shell do aluno | `docs/ARCHITECTURE.md` (tabela de views) + `docs/SPRINTS.md` (Done) |
-| Nova view no shell do professor | `docs/ARCHITECTURE.md` + `docs/SPRINTS.md` |
-| Novo componente em `src/components/` | `docs/ARCHITECTURE.md` (seção componentes compartilhados) |
-| Novo arquivo em `src/lib/` | `docs/ARCHITECTURE.md` (tabela da camada src) |
-| Nova rota em `src/routes/AppRoutes.jsx` | `docs/ARCHITECTURE.md` (fluxo de autenticação) + `README.md` |
-| Nova dependência npm | `docs/STACK.md` |
-| Nova convenção de código | `AGENTS.md` |
-| Mudança estrutural maior | `README.md` |
+A documentação precisa acompanhar a camada tocada.
 
----
+| Mudança no código | Documentos a atualizar |
+|-------------------|------------------------|
+| nova view em um shell | `docs/ARCHITECTURE.md` e `docs/SPRINTS.md` |
+| nova rota React Router | `README.md` e `docs/ARCHITECTURE.md` |
+| novo endpoint `/api/*` | `README.md`, `docs/ARCHITECTURE.md` e `docs/STACK.md` |
+| nova dependência | `docs/STACK.md` |
+| nova variável de ambiente ou setup | `README.md`, `CLAUDE.md` e `CONTRIBUTING.md` |
+| nova convenção de código | `AGENTS.md` |
 
 ## Regras de contribuição
 
-**Estrutura:**
-- Mantenha o fluxo login-first intacto.
-- Features do aluno vão no shell do aluno; features do professor no shell do professor.
-- Não deixe features acessíveis apenas por URL direta — integre ao shell.
-- `src/` é para bootstrapping, routing e feature slices. Não reintroduza dependências
-  de runtime em `legacy/`.
+Mantenha estes limites durante a implementação.
 
-**Código:**
-- Somente Tailwind CSS — zero CSS modules, styled-components ou @apply.
-- Ícones somente de `lucide-react` — verifique o nome em `lucide.dev`.
-- Export nomeado em `src/components/`. Módulos de feature usam `export default`.
-- Zero `console.log` commitado.
+**Estrutura**
 
-**Commits** (Conventional Commits em português):
-```
+- preserve o fluxo login-first;
+- não crie rotas internas para módulos que já pertencem ao shell;
+- mantenha `legacy/` drenado, sem novos imports de runtime;
+- use `src/services/` como a porta do frontend para dados reais.
+
+**Código**
+
+- use somente Tailwind para styling;
+- importe ícones apenas de `lucide-react`;
+- use export nomeado em `src/components/`;
+- remova `console.log`, `TODO` e `FIXME` antes de commitar.
+
+**Commits**
+
+Use Conventional Commits em português.
+
+```text
 feat(shell): adiciona view de cronograma adaptativo
-fix(modal): corrige overflow em telas menores que 640px
-style: aplica paleta navy/amarelo no banner do aluno
-refactor(raio-x): extrai dados para StudentFeatures.jsx
-docs: atualiza ARCHITECTURE.md com nova view
+fix(auth): corrige leitura da sessao apos confirmacao de email
+docs: atualiza arquitetura do backend /api
 ```
-
----
 
 ## Checklist de pull request
 
-Antes de abrir o PR, confirme cada item:
+Antes de abrir o PR, confirme:
 
-- [ ] `npm run build` termina sem erros
-- [ ] A feature está integrada no shell correto (não só em arquivo isolado)
-- [ ] Nenhuma rota nova viola o fluxo login-first
-- [ ] Documentação atualizada conforme a tabela acima
-- [ ] Zero `console.log`, `TODO` ou `FIXME` no código
-- [ ] Ícones Lucide verificados por nome em `lucide.dev`
-- [ ] Commits seguem Conventional Commits
-
----
+- [ ] `npm run test` passa
+- [ ] `npm run build` passa
+- [ ] a mudança entrou na camada correta
+- [ ] nenhuma rota nova quebre o fluxo login-first
+- [ ] a documentação afetada foi atualizada
+- [ ] não há `console.log`, `TODO` ou `FIXME`
+- [ ] os commits seguem Conventional Commits
 
 ## Escopo de pull requests
 
-Prefira PRs focados em um único tipo de mudança.
+Prefira PRs com um único tema técnico.
 
-**Exemplos de bom escopo:**
-- Integrar um novo módulo do aluno
-- Corrigir um bug de layout em um componente específico
-- Atualizar documentação de arquitetura
-- Refatorar um componente para `src/components/`
+**Bom escopo**
 
-**Evite misturar:**
-- Feature nova + refactor não relacionado
-- Mudança de produto + mudança de infraestrutura
-- Múltiplos módulos não relacionados em um PR
+- integrar um endpoint novo;
+- conectar uma view existente ao serviço real;
+- corrigir um bug de shell ou layout;
+- atualizar documentação estrutural.
 
----
+**Evite misturar**
+
+- feature nova com refactor não relacionado;
+- mudança visual grande com alteração de infraestrutura;
+- múltiplos domínios sem relação direta no mesmo PR.
 
 ## Contato
 
 Bugs, sugestões e feedback: `plfonseca@usp.br`
-
-Para contexto adicional do projeto e histórico de decisões, consulte
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) e o histórico de commits.

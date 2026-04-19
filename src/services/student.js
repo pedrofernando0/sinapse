@@ -1,27 +1,51 @@
-import { createClient } from '../lib/supabase/client.js'
+import {
+  apiRequest,
+  cachedApiRequest,
+  clearApiCache,
+} from './api.js'
 
-const supabase = createClient()
-
-const VALID_NOTIFICATION_PRIORITIES = new Set(['danger', 'warning', 'success', 'info'])
+const VALID_PRIORITIES = new Set(['danger', 'warning', 'success', 'info'])
 const VALID_REVISION_STATUSES = new Set(['pending', 'done'])
+const STUDENT_NOTIFICATIONS_CACHE_KEY = 'student-notifications'
+const STUDENT_MOCK_EXAMS_CACHE_KEY = 'student-mock-exams'
+const STUDENT_REVISIONS_CACHE_KEY = 'student-revisions'
 
-const normalizeValue = (value = '') => value.trim()
+const buildFallbackId = () => `student-${Math.random().toString(36).slice(2, 10)}`
+const normalizeValue = (value = '') => String(value).trim()
 
-const createStudentServiceError = (message, cause = null) => {
-  const error = new Error(message)
-  error.name = 'StudentServiceError'
-  if (cause) {
-    error.cause = cause
+const normalizeNotification = (notification) => {
+  const createdAt = new Date(notification?.createdAt)
+
+  return {
+    id: String(notification?.id ?? buildFallbackId()),
+    title: normalizeValue(notification?.title) || 'Notificacao',
+    body: normalizeValue(notification?.body),
+    createdAt: Number.isNaN(createdAt.getTime())
+      ? new Date().toISOString()
+      : createdAt.toISOString(),
+    read: Boolean(notification?.read),
+    priority: VALID_PRIORITIES.has(notification?.priority)
+      ? notification.priority
+      : 'info',
   }
-  return error
 }
 
+const normalizeRevision = (revision) => ({
+  date: String(revision?.date ?? revision?.scheduledFor ?? new Date().toISOString().slice(0, 10)),
+  id: String(revision?.id ?? buildFallbackId()),
+  status: VALID_REVISION_STATUSES.has(revision?.status) ? revision.status : 'pending',
+  subject: normalizeValue(revision?.subject) || 'Geral',
+  topic: normalizeValue(revision?.topic) || 'Novo topico',
+})
+
 const determineExamLevel = ({ acertos, total }) => {
-  if (!total) {
+  const numericTotal = Number(total)
+
+  if (!numericTotal) {
     return 'bad'
   }
 
-  const percentage = acertos / total
+  const percentage = Number(acertos) / numericTotal
 
   if (percentage >= 0.7) {
     return 'good'
@@ -34,215 +58,148 @@ const determineExamLevel = ({ acertos, total }) => {
   return 'bad'
 }
 
-const formatDuration = (durationMinutes = 0) => {
-  const hours = Math.floor(durationMinutes / 60)
-  const minutes = durationMinutes % 60
-
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
-}
-
-const parseDurationToMinutes = (value = '') => {
-  const [hours = '0', minutes = '0'] = String(value).split(':')
-  return Number(hours) * 60 + Number(minutes)
-}
-
-const mapNotificationRow = (row) => ({
-  id: String(row.id),
-  title: normalizeValue(row.title) || 'Notificacao',
-  body: normalizeValue(row.body),
-  createdAt: row.created_at,
-  read: Boolean(row.read),
-  priority: VALID_NOTIFICATION_PRIORITIES.has(row.priority) ? row.priority : 'info',
-})
-
-const mapRevisionRow = (row) => ({
-  id: row.id,
-  subject: normalizeValue(row.subject),
-  topic: normalizeValue(row.topic),
-  date: row.scheduled_for,
-  status: VALID_REVISION_STATUSES.has(row.status) ? row.status : 'pending',
-})
-
-const mapMockExamRow = (row) => {
-  const acertos = Number(row.correct_answers)
-  const total = Number(row.total_questions)
-  const durationMinutes = Number(row.duration_minutes || 0)
+const normalizeMockExam = (exam) => {
+  const acertos = Number(exam?.acertos ?? exam?.correctAnswers ?? 0)
+  const total = Number(exam?.total ?? exam?.totalQuestions ?? 0)
 
   return {
-    id: row.id,
-    name: normalizeValue(row.name),
-    date: row.exam_date,
     acertos,
-    total,
-    time: formatDuration(durationMinutes),
+    date: String(exam?.date ?? exam?.examDate ?? new Date().toISOString().slice(0, 10)),
+    id: String(exam?.id ?? buildFallbackId()),
     level: determineExamLevel({ acertos, total }),
+    name: normalizeValue(exam?.name) || 'Simulado',
+    time: String(exam?.time ?? exam?.duration ?? '00:00'),
+    total,
   }
 }
 
-const requireCurrentUser = async () => {
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser()
-
-  if (error) {
-    throw createStudentServiceError('Nao foi possivel validar a sessao atual.', error)
-  }
-
-  if (!user) {
-    throw createStudentServiceError('Voce precisa estar autenticado para acessar esses dados.')
-  }
-
-  return user
-}
+const invalidateNotifications = () => clearApiCache(STUDENT_NOTIFICATIONS_CACHE_KEY)
+const invalidateMockExams = () => clearApiCache(STUDENT_MOCK_EXAMS_CACHE_KEY)
+const invalidateRevisions = () => clearApiCache(STUDENT_REVISIONS_CACHE_KEY)
 
 export async function getStudentNotifications() {
-  const { data, error } = await supabase
-    .from('student_notifications')
-    .select('id, title, body, priority, read, created_at')
-    .order('created_at', { ascending: false })
+  const response = await cachedApiRequest({
+    cacheKey: STUDENT_NOTIFICATIONS_CACHE_KEY,
+    path: '/student/notifications',
+  })
 
-  if (error) {
-    throw createStudentServiceError('Nao foi possivel carregar as notificacoes.', error)
-  }
-
-  return (data || []).map(mapNotificationRow)
+  return Array.isArray(response) ? response.map(normalizeNotification) : []
 }
 
 export async function markStudentNotificationAsRead(notificationId) {
-  const { error } = await supabase
-    .from('student_notifications')
-    .update({ read: true })
-    .eq('id', notificationId)
+  await apiRequest({
+    method: 'PATCH',
+    path: `/student/notifications/${notificationId}`,
+  })
 
-  if (error) {
-    throw createStudentServiceError('Nao foi possivel atualizar a notificacao.', error)
-  }
+  invalidateNotifications()
 }
 
 export async function markAllStudentNotificationsAsRead() {
-  const user = await requireCurrentUser()
-  const { error } = await supabase
-    .from('student_notifications')
-    .update({ read: true })
-    .eq('user_id', user.id)
-    .eq('read', false)
+  await apiRequest({
+    method: 'POST',
+    path: '/student/notifications/read-all',
+  })
 
-  if (error) {
-    throw createStudentServiceError('Nao foi possivel marcar todas as notificacoes como lidas.', error)
-  }
+  invalidateNotifications()
 }
 
 export async function getStudentRevisions() {
-  const { data, error } = await supabase
-    .from('student_revisions')
-    .select('id, subject, topic, scheduled_for, status')
-    .order('scheduled_for', { ascending: true })
+  const response = await cachedApiRequest({
+    cacheKey: STUDENT_REVISIONS_CACHE_KEY,
+    path: '/student/revisions',
+  })
 
-  if (error) {
-    throw createStudentServiceError('Nao foi possivel carregar as revisoes.', error)
-  }
+  return Array.isArray(response) ? response.map(normalizeRevision) : []
+}
 
-  return (data || []).map(mapRevisionRow)
+export async function createStudentRevision(payload) {
+  const response = await apiRequest({
+    body: payload,
+    method: 'POST',
+    path: '/student/revisions',
+  })
+
+  invalidateRevisions()
+  return normalizeRevision(response)
+}
+
+export async function updateStudentRevision(id, payload) {
+  const response = await apiRequest({
+    body: payload,
+    method: 'PATCH',
+    path: `/student/revisions/${id}`,
+  })
+
+  invalidateRevisions()
+  return normalizeRevision(response)
 }
 
 export async function saveStudentRevision(revision) {
-  const user = await requireCurrentUser()
-  const payload = {
-    user_id: user.id,
-    subject: normalizeValue(revision.subject),
-    topic: normalizeValue(revision.topic),
-    scheduled_for: revision.date,
-    status: VALID_REVISION_STATUSES.has(revision.status) ? revision.status : 'pending',
+  if (revision?.id) {
+    return updateStudentRevision(revision.id, revision)
   }
 
-  const query = revision.id
-    ? supabase.from('student_revisions').update(payload).eq('id', revision.id)
-    : supabase.from('student_revisions').insert(payload)
-
-  const { data, error } = await query
-    .select('id, subject, topic, scheduled_for, status')
-    .single()
-
-  if (error) {
-    throw createStudentServiceError('Nao foi possivel salvar a revisao.', error)
-  }
-
-  return mapRevisionRow(data)
+  return createStudentRevision(revision)
 }
 
 export async function updateStudentRevisionStatus(revisionId, status) {
-  const { data, error } = await supabase
-    .from('student_revisions')
-    .update({ status })
-    .eq('id', revisionId)
-    .select('id, subject, topic, scheduled_for, status')
-    .single()
-
-  if (error) {
-    throw createStudentServiceError('Nao foi possivel atualizar o status da revisao.', error)
-  }
-
-  return mapRevisionRow(data)
+  return updateStudentRevision(revisionId, { status })
 }
 
 export async function deleteStudentRevision(revisionId) {
-  const { error } = await supabase
-    .from('student_revisions')
-    .delete()
-    .eq('id', revisionId)
+  await apiRequest({
+    method: 'DELETE',
+    path: `/student/revisions/${revisionId}`,
+  })
 
-  if (error) {
-    throw createStudentServiceError('Nao foi possivel excluir a revisao.', error)
-  }
+  invalidateRevisions()
 }
 
 export async function getStudentMockExams() {
-  const { data, error } = await supabase
-    .from('student_mock_exams')
-    .select('id, name, exam_date, correct_answers, total_questions, duration_minutes')
-    .order('exam_date', { ascending: false })
+  const response = await cachedApiRequest({
+    cacheKey: STUDENT_MOCK_EXAMS_CACHE_KEY,
+    path: '/student/mock-exams',
+  })
 
-  if (error) {
-    throw createStudentServiceError('Nao foi possivel carregar os simulados.', error)
-  }
+  return Array.isArray(response) ? response.map(normalizeMockExam) : []
+}
 
-  return (data || []).map(mapMockExamRow)
+export async function createStudentMockExam(payload) {
+  const response = await apiRequest({
+    body: payload,
+    method: 'POST',
+    path: '/student/mock-exams',
+  })
+
+  invalidateMockExams()
+  return normalizeMockExam(response)
+}
+
+export async function updateStudentMockExam(id, payload) {
+  const response = await apiRequest({
+    body: payload,
+    method: 'PATCH',
+    path: `/student/mock-exams/${id}`,
+  })
+
+  invalidateMockExams()
+  return normalizeMockExam(response)
 }
 
 export async function saveStudentMockExam(exam) {
-  const user = await requireCurrentUser()
-  const payload = {
-    user_id: user.id,
-    name: normalizeValue(exam.name),
-    exam_date: exam.date,
-    correct_answers: Number(exam.acertos),
-    total_questions: Number(exam.total),
-    duration_minutes: parseDurationToMinutes(exam.time),
+  if (exam?.id) {
+    return updateStudentMockExam(exam.id, exam)
   }
 
-  const query = exam.id
-    ? supabase.from('student_mock_exams').update(payload).eq('id', exam.id)
-    : supabase.from('student_mock_exams').insert(payload)
-
-  const { data, error } = await query
-    .select('id, name, exam_date, correct_answers, total_questions, duration_minutes')
-    .single()
-
-  if (error) {
-    throw createStudentServiceError('Nao foi possivel salvar o simulado.', error)
-  }
-
-  return mapMockExamRow(data)
+  return createStudentMockExam(exam)
 }
 
 export async function deleteStudentMockExam(examId) {
-  const { error } = await supabase
-    .from('student_mock_exams')
-    .delete()
-    .eq('id', examId)
+  await apiRequest({
+    method: 'DELETE',
+    path: `/student/mock-exams/${examId}`,
+  })
 
-  if (error) {
-    throw createStudentServiceError('Nao foi possivel excluir o simulado.', error)
-  }
+  invalidateMockExams()
 }

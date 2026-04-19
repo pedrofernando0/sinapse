@@ -1,264 +1,172 @@
 # Sinapse — Contexto para Agentes de IA
 
-Plataforma educacional do **Cursinho Popular da Poli** (EPUSP). Prototype React em
-produção ativa. Dois perfis: aluno (vestibulando) e professor. Nenhum backend real —
-dados são mockados e a sessão demo usa Web Storage configurável com TTL.
-
----
+Plataforma educacional do **Cursinho Popular da Poli** (EPUSP). O projeto já
+não é mais um frontend demo puro: autenticação e parte das operações do aluno
+rodam com Supabase real via backend `/api`, enquanto boa parte das views ainda
+permanece mockada.
 
 ## Comandos rápidos
 
+Use estes comandos como ponto de partida.
+
 ```bash
-npm install        # instala dependências (node_modules ausente no clone)
-npm run dev        # dev server em http://localhost:5173
-npm run build      # build de produção (Vite — valida JSX/imports)
-npm run preview    # preview do build de produção
+npm install
+npm run dev
+npm run test
+npm run build
+npm run preview
+npm run supabase:provision-demo
 ```
 
-> **Setup demo**: copie `.env.example` para `.env.local` e defina as credenciais
-> `VITE_DEMO_*` se quiser manter contas seedadas. Quando contas do aluno estão
-> configuradas, o shell do aluno passa a validá-las. Professor continua
-> aceitando qualquer combinação não vazia em modo demo.
+`npm run supabase:provision-demo` exige `SUPABASE_SERVICE_ROLE_KEY` e, quando
+necessário, `SUPABASE_PROJECT_REF`.
 
----
+## Setup local
+
+O setup mínimo do frontend usa `.env.local`.
+
+```bash
+cp .env.example .env.local
+```
+
+Para fluxos que dependem de `/api/*`, o frontend local precisa de um backend
+alcançável. Há dois caminhos suportados:
+
+1. Definir `VITE_API_BASE_URL` apontando para um deploy existente.
+2. Rodar o projeto via `vercel dev`, caso o Vercel CLI esteja instalado.
+
+Variáveis importantes:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `VITE_ENABLE_DEMO_SHORTCUT`
+- `VITE_DEMO_STUDENT_EMAIL`
+- `VITE_DEMO_TEACHER_EMAIL`
 
 ## Estrutura do repositório
 
-```
+A árvore principal do runtime atual é esta:
+
+```text
 sinapse/
-├── legacy/                   # diretório drenado; mantido vazio até a limpeza final
-│
+├── api/
+│   └── [...path].js              # bridge Vercel Node → Web Request
 ├── src/
-│   ├── App.jsx               # provider host — renderiza <AppRoutes /> apenas
-│   ├── main.jsx              # createRoot + BrowserRouter
-│   ├── index.css             # fontes (Fraunces + Manrope) + base dark
-│   ├── components/           # componentes presentacionais compartilhados (named exports)
+│   ├── App.jsx                   # AppErrorBoundary + AuthBootstrap + AppRoutes
+│   ├── components/               # compartilhados
+│   │   ├── AppErrorBoundary.jsx
 │   │   ├── ProfileActionPanels.jsx
 │   │   └── StudentFeatures.jsx
-│   ├── features/             # domínios de produto (Feature-Sliced Design)
-│   │   ├── auth/
-│   │   │   └── Login.jsx
-│   │   ├── student/
-│   │   │   ├── StudentShell.jsx
-│   │   │   ├── CalendarView.jsx
-│   │   │   ├── ScheduleView.jsx
-│   │   │   ├── Readings.jsx
-│   │   │   ├── Revisions.jsx
-│   │   │   ├── Pomodoro.jsx
-│   │   │   ├── Mentorship.jsx
-│   │   │   ├── MoodTracker.jsx
-│   │   │   └── SupportNetwork.jsx
-│   │   ├── teacher/
-│   │   │   ├── TeacherShell.jsx
-│   │   │   └── LessonPlanner.jsx
-│   │   ├── assessments/
-│   │   │   ├── Simulados.jsx
-│   │   │   ├── TriSimulator.jsx
-│   │   │   └── FuvestApproval.jsx
-│   │   └── ai-tools/
-│   │       ├── Tutoria.jsx
-│   │       ├── DiscursiveAI.jsx
-│   │       └── EssayReview.jsx
+│   ├── features/                 # auth, student, teacher, ai-tools, assessments
+│   ├── layouts/                  # StudentShellLayout, TeacherShellLayout
 │   ├── lib/
-│   │   ├── demoSession.js
 │   │   ├── launchExperience.js
-│   │   └── pageLoaders.js
-│   ├── pages/                # entry points de rotas — orquestram features + libs
-│   │   ├── LoginPage.jsx
-│   │   ├── StudentShellPage.jsx
-│   │   └── TeacherShellPage.jsx
-│   └── routes/
-│       └── AppRoutes.jsx     # ✅ toda a configuração declarativa de rotas
-│
+│   │   ├── pageLoaders.js
+│   │   ├── supabase/
+│   │   │   ├── client.js
+│   │   │   └── server.js
+│   │   └── useAuth.js
+│   ├── pages/                    # LoginPage e entry points dos shells
+│   ├── routes/
+│   │   └── AppRoutes.jsx
+│   ├── server/api/               # router, handlers e cliente server-side
+│   ├── services/                 # api.js, auth.js, student.js
+│   └── store/                    # sessionSlice + uiSlice em Zustand
+├── supabase/
+│   └── migrations/               # schema e políticas do runtime real
 ├── docs/
-│   ├── ARCHITECTURE.md       # design do sistema + mapa de migração
-│   ├── SPRINTS.md            # kanban e backlog de sprints
-│   └── STACK.md              # referência por biblioteca
-│
-├── AGENTS.md                 # LEIA ANTES DE QUALQUER INTERVENÇÃO
-├── CLAUDE.md                 # este arquivo
-├── CONTRIBUTING.md           # regras de contribuição humana
-└── README.md                 # visão geral pública do projeto
+├── AGENTS.md
+├── CLAUDE.md
+└── CONTRIBUTING.md
 ```
 
-> **Mantenha `legacy/` vazio.** Novos módulos vão em `src/features/{domínio}/`.
+`legacy/` segue drenado. Não reintroduza imports de runtime para lá.
 
----
+## Arquitetura atual
 
-## Arquitetura (estado atual — Sprint Arq em progresso)
+O runtime mistura três superfícies de estado.
 
-```
-src/routes/   →  configuração declarativa de rotas (AppRoutes.jsx)
-src/features/ →  domínios de produto (Feature-Sliced Design) — crescendo
-src/pages/    →  entry points de rotas: orquestram features + libs
-src/components/ → componentes presentacionais compartilhados
-src/lib/      →  sessão, experiência de lançamento, preload
-legacy/       →  diretório drenado, sem dependências de runtime a partir de src/
-```
+- `React Router` faz o roteamento entre login, shell do aluno e shell do
+  professor.
+- `Zustand` guarda auth, sessão e estado de sidebar.
+- `AppContext` e `TeacherContext` continuam responsáveis pela navegação interna
+  de cada shell.
 
-`src/features/*` não importa de `src/pages/` nem de outros feature slices.
-Orquestração cross-slice para shells acontece em `src/pages/*ShellPage.jsx`.
+No lado dos dados:
 
----
+- `src/services/auth.js` e `src/services/student.js` falam com `/api/*`.
+- `api/[...path].js` encaminha para `src/server/api/router.js`.
+- `src/server/api/*` usa `@supabase/ssr` para operar sobre cookies e sessão.
+- `src/lib/supabase/client.js` permanece no browser para `onAuthStateChange()`
+  e `updateUserPassword()` no fluxo de recuperação.
 
 ## Fluxo de runtime
 
-```
-src/main.jsx  (createRoot + BrowserRouter)
-  └── App.jsx  (provider host)
-        └── routes/AppRoutes.jsx
-              ├── /  /login   → LoginPage → features/auth/Login.jsx
-              │                  └── handleLogin() → buildDemoSession() → navigate(destino do perfil)
-              ├── /aluno/*    → StudentShellPage
-              │                  ├── lê sessão + saneia ?view=
-              │                  ├── sincroniza currentView ↔ ?view=
-              │                  ├── injeta lazy views cross-slice quando necessário
-              │                  └── features/student/StudentShell.jsx
-              └── /professor/* → TeacherShellPage
-                                  ├── lê sessão + saneia ?view=
-                                  ├── sincroniza currentView ↔ ?view=
-                                  └── features/teacher/TeacherShell.jsx
+O caminho principal de execução é este:
+
+```text
+src/main.jsx
+  └── BrowserRouter
+      └── src/App.jsx
+          ├── AppErrorBoundary
+          ├── AuthBootstrap
+          └── AppRoutes
+              ├── /login        → LoginPage → features/auth/Login.jsx
+              ├── /aluno        → StudentShellLayout → StudentShellPage
+              └── /professor    → TeacherShellLayout → TeacherShellPage
 ```
 
-Navegação interna aos shells **não usa React Router**: usa
-`AppContext.navigate(view)` no aluno e `TeacherContext.navigate(view)` no
-professor. Os wrappers dos shells refletem `currentView` em `?view=` e
-rebaixam views inválidas para `dashboard` ou `overview`.
+`AuthBootstrap` hidrata a sessão em Zustand. Os layouts validam o perfil
+autenticado, saneiam `?view=` e entregam contexto ao shell correto.
 
----
+## Fluxo de dados real
 
-## Sistema de sessão
+O backend já cobre estes endpoints:
 
-`src/lib/demoSession.js` gerencia sessões demo:
+- `/api/auth/session`
+- `/api/auth/login`
+- `/api/auth/logout`
+- `/api/auth/register`
+- `/api/auth/recover`
+- `/api/student/notifications`
+- `/api/student/notifications/read-all`
+- `/api/student/notifications/:id`
+- `/api/student/mock-exams`
+- `/api/student/mock-exams/:id`
+- `/api/student/revisions`
+- `/api/student/revisions/:id`
 
-| Função | O que faz |
-|--------|-----------|
-| `buildDemoSession(profile, formData)` | cria objeto de sessão ou retorna `null` quando o login demo do aluno é inválido |
-| `persistDemoSession(session)` | salva em `sessionStorage` ou `localStorage`, conforme `SECURITY_CONFIG` |
-| `getStoredDemoSession(profile)` | lê, valida TTL e rejeita sessão inválida |
-| `clearDemoSession()` | remove ao fazer logout |
-
-As contas seedadas usam variáveis `VITE_DEMO_*`. O repositório não mantém mais
-senhas demo fixas em código versionado. Quando não há contas do aluno
-configuradas, o shell do aluno continua aceitando qualquer combinação não
-vazia em modo demo.
-
----
+O shell do professor ainda não depende desse backend.
 
 ## Identidade visual
 
-| Contexto | Token Tailwind | Uso |
-|----------|---------------|-----|
-| Aluno — primário | `blue-900`, `blue-950` | gradientes, botões, sidebar active |
-| Aluno — acento | `yellow-400`, `yellow-50` | badges, destaques, toggles |
-| Professor — primário | `indigo-600`, `indigo-700` | equivalente ao blue do aluno |
-| Status: sucesso | `teal-500` | progresso completo, notif positiva |
-| Status: atenção | `orange-500` | XP bar, deadlines |
-| Status: perigo | `red-500` | notif crítica, risco de evasão |
-| Superfícies | `slate-50` a `slate-900` | fundos, bordas, textos |
+Mantenha a paleta e o contraste do produto.
 
-Fontes: `Fraunces` (serifada, usada em headings de destaque) e `Manrope` (sans-serif, uso geral).
+| Contexto | Tokens principais |
+|----------|-------------------|
+| Aluno | `blue-950`, `blue-900`, `yellow-400`, `yellow-50` |
+| Professor | `indigo-700`, `indigo-600` |
+| Sucesso | `teal-500` |
+| Atenção | `orange-500` |
+| Perigo | `red-500` |
 
----
+## Padrões de implementação
 
-## Padrões de componente
+Alguns limites importam para não quebrar o runtime.
 
-### Primitivos reutilizáveis (definidos em `src/features/student/StudentShell.jsx`)
-
-```jsx
-<Card className="...">           // bg-white/80 backdrop-blur-md, rounded-2xl
-<ProgressBar progress={85} colorClass="bg-blue-500" />
-```
-
-### Modais (em `ProfileActionPanels.jsx`)
-
-```jsx
-<AccountSettingsModal open={bool} onClose={fn} profile="student" userName="..." />
-<AccountHelpModal     open={bool} onClose={fn} profile="student" userName="..." />
-```
-
-O `ModalFrame` exportado já lida com: `max-h-[90vh]`, `overflow-y-auto`, Escape key, body scroll lock.
-
-### Views imersivas (full-screen)
-
-Módulos em `IMMERSIVE_VIEWS` (Set em `src/features/student/StudentShell.jsx`) recebem a área de conteúdo sem
-padding. Para adicionar banner/header a um módulo imersivo, use `position: sticky top-0`
-(ver `MentoriaView` em `src/components/StudentFeatures.jsx` como referência).
-
----
-
-## Como adicionar uma view ao shell do aluno
-
-1. Defina o slice correto:
-   - `src/features/student/` se a view é estritamente do domínio do aluno.
-   - `src/features/assessments/` ou `src/features/ai-tools/` se a view pertence a
-     esses domínios, mesmo sendo renderizada dentro do shell do aluno.
-2. Se a view ficar em `src/features/student/`, crie o módulo com `export default`
-   e faça o lazy import diretamente em `src/features/student/StudentShell.jsx`.
-3. Se a view ficar em outro slice, crie o módulo no slice correto e faça o lazy
-   import em `src/pages/StudentShellPage.jsx`, adicionando a entrada no objeto
-   `STUDENT_SHELL_EXTERNAL_VIEWS`.
-4. Em `src/features/student/StudentShell.jsx`, adicione a entrada em
-   `VIEW_TITLES`, `NAVIGATION_SECTIONS`, `IMMERSIVE_VIEWS` (se aplicável) e no
-   bloco de renderização correspondente.
-5. Atualize `docs/ARCHITECTURE.md` e `docs/SPRINTS.md`.
-
----
-
-## Como adicionar uma view ao shell do professor
-
-Mesmo fluxo, porém em `src/features/teacher/TeacherShell.jsx` usando
-`TeacherContext`, os itens de `SidebarItem` e o bloco de renderização por
-`currentView`. Não há `IMMERSIVE_VIEWS` no shell do professor — todos os
-módulos recebem padding padrão.
-
----
-
-## Imports mais usados
-
-```jsx
-// Ícones — SEMPRE de lucide-react, verifique o nome em lucide.dev
-import { Home, Bell, Star, CheckCircle2 } from 'lucide-react';
-
-// Componentes compartilhados — de src/features/*/
-import { AccountSettingsModal, AccountHelpModal } from '../../components/ProfileActionPanels.jsx';
-
-import { RaioXSection, MentoriaView } from '../../components/StudentFeatures.jsx';
-
-// Sessão
-import { getStoredDemoSession, clearDemoSession } from '../../lib/demoSession.js';  // de src/features/*/
-import TeacherShell from '../features/teacher/TeacherShell.jsx';                    // de src/pages/
-```
-
-| Importando de | Caminho para src/components/ | Caminho para src/lib/ |
-|---------------|-----------------------------|-----------------------|
-| `src/features/auth/` | `../../components/...` | `../../lib/...` |
-| `src/features/student/` | `../../components/...` | `../../lib/...` |
-| `src/features/teacher/` | `../../components/...` | `../../lib/...` |
-| `src/features/assessments/` | `../../components/...` | `../../lib/...` |
-| `src/features/ai-tools/` | `../../components/...` | `../../lib/...` |
-| `src/pages/` | `../components/...` | `../lib/...` |
-
----
-
-## O que NÃO fazer
-
-- Não criar rotas novas em `src/routes/AppRoutes.jsx` para features que já cabem dentro de um shell.
-- Não usar CSS modules, styled-components ou classes customizadas — **somente Tailwind**.
-- Não chamar hooks fora do render de componentes (ex.: hook em event handler).
-- Não remover o fluxo login-first sem alinhamento explícito.
-- Não commitar com `eslint-disable` ou `@ts-ignore` sem justificativa no PR.
-- Não adicionar dependências sem verificar se `lucide-react` ou `tailwindcss-animate`
-  já cobrem o caso.
-
----
+- Não crie rotas internas novas para views do shell. Use `currentView`.
+- Não mova lógica de auth para componentes visuais. Ela passa por
+  `src/lib/useAuth.js` e `src/services/auth.js`.
+- Não faça `fetch` direto em feature slices quando a integração já existe em
+  `src/services/`.
+- Não adicione backend paralelo fora de `api/[...path].js` e `src/server/api/`
+  sem atualizar `docs/ARCHITECTURE.md`.
 
 ## Referências rápidas
 
-| Preciso de... | Onde está |
-|---------------|-----------|
-| Regras de intervenção AI | `AGENTS.md` |
-| Diagrama de arquitetura | `docs/ARCHITECTURE.md` |
-| Backlog e sprint atual | `docs/SPRINTS.md` |
-| Referência de libs | `docs/STACK.md` |
-| Regras de PR | `CONTRIBUTING.md` |
+Quando precisar de contexto extra, consulte:
+
+- `AGENTS.md` para as regras prescritivas de intervenção.
+- `docs/ARCHITECTURE.md` para fluxos e limites de camada.
+- `docs/SPRINTS.md` para o backlog ainda pendente.
+- `docs/STACK.md` para o uso esperado das bibliotecas.

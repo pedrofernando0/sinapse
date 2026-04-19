@@ -1,4 +1,5 @@
 import { createClient } from '../lib/supabase/client.js'
+import { apiRequest } from './api.js'
 
 const supabase = createClient()
 
@@ -6,7 +7,6 @@ const DEMO_ALIAS = 'pedro'
 const DEMO_ALIAS_PASSWORD = 'pedro'
 const DEFAULT_DEMO_STUDENT_EMAIL = 'demo.aluno.pedro@sinapse.app'
 const DEFAULT_DEMO_TEACHER_EMAIL = 'demo.professor.pedro@sinapse.app'
-const CANONICAL_PRODUCTION_URL = 'https://sinapse-dusky.vercel.app'
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const normalizeValue = (value = '') => value.trim()
@@ -27,47 +27,32 @@ const createAuthError = (message, cause = null) => {
 const getDemoStudentEmail = () => normalizeValue(import.meta.env.VITE_DEMO_STUDENT_EMAIL || DEFAULT_DEMO_STUDENT_EMAIL)
 const getDemoTeacherEmail = () => normalizeValue(import.meta.env.VITE_DEMO_TEACHER_EMAIL || DEFAULT_DEMO_TEACHER_EMAIL)
 
-export const isDemoShortcutEnabled = () => {
-  if (import.meta.env.DEV) {
-    return true
-  }
+const buildProfilePayload = (profileRecord = {}) => ({
+  user_id: profileRecord.user_id,
+  email: normalizeValue(profileRecord.email),
+  full_name: normalizeValue(profileRecord.full_name),
+  role: normalizeRole(profileRecord.role),
+  hidden_student_views: normalizeHiddenStudentViews(profileRecord.hidden_student_views),
+})
 
-  return normalizeIdentifier(import.meta.env.VITE_ENABLE_DEMO_SHORTCUT) === 'true'
-}
+const buildSessionPayload = (session = {}) => ({
+  userId: session.userId,
+  email: normalizeValue(session.email),
+  name: normalizeValue(session.name || buildDisplayNameFromEmail(session.email)),
+  profile: normalizeRole(session.profile),
+  hiddenStudentViews: normalizeHiddenStudentViews(session.hiddenStudentViews),
+})
 
-export const getDemoShortcutHint = (role) => {
-  if (!isDemoShortcutEnabled()) {
-    return null
-  }
-
-  return `Atalho demo liberado: ${DEMO_ALIAS}/${DEMO_ALIAS} (${role})`
-}
-
-export const isPasswordRecoveryFlow = () => {
-  if (typeof window === 'undefined') {
-    return false
-  }
-
-  return window.location.hash.includes('type=recovery')
-}
-
-export const clearPasswordRecoveryHash = () => {
-  if (typeof window === 'undefined' || !window.location.hash) {
-    return
-  }
-
-  window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`)
-}
-
-const getAppOrigin = () => {
-  if (typeof window !== 'undefined') {
-    return window.location.origin
-  }
-
-  return CANONICAL_PRODUCTION_URL
-}
-
-const buildRedirectUrl = (path = '/login') => new URL(path, getAppOrigin()).toString()
+const normalizeAuthPayload = (payload = {}) => ({
+  authUser: payload.authUser
+    ? {
+        id: payload.authUser.id,
+        email: normalizeValue(payload.authUser.email),
+      }
+    : null,
+  profileRecord: payload.profileRecord ? buildProfilePayload(payload.profileRecord) : null,
+  session: payload.session ? buildSessionPayload(payload.session) : null,
+})
 
 const resolveLoginEmail = ({ profile, identifier }) => {
   const normalizedIdentifier = normalizeIdentifier(identifier)
@@ -108,69 +93,48 @@ const resolveLoginPassword = ({ identifier, password }) => {
   return normalizedPassword
 }
 
-const buildProfilePayload = (profileRecord = {}) => ({
-  user_id: profileRecord.user_id,
-  email: normalizeValue(profileRecord.email),
-  full_name: normalizeValue(profileRecord.full_name),
-  role: normalizeRole(profileRecord.role),
-  hidden_student_views: normalizeHiddenStudentViews(profileRecord.hidden_student_views),
-})
-
-const buildSessionPayload = ({ user, profileRecord }) => ({
-  userId: user.id,
-  email: normalizeValue(profileRecord?.email || user.email || ''),
-  name: normalizeValue(profileRecord?.full_name || user.user_metadata?.full_name || buildDisplayNameFromEmail(user.email)),
-  profile: normalizeRole(profileRecord?.role),
-  hiddenStudentViews: normalizeHiddenStudentViews(profileRecord?.hidden_student_views),
-})
-
-const ensureOwnProfile = async (user) => {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('user_id, email, full_name, role, hidden_student_views')
-    .eq('user_id', user.id)
-    .maybeSingle()
-
-  if (error) {
-    throw createAuthError('Nao foi possivel carregar o perfil da conta.', error)
+export const isDemoShortcutEnabled = () => {
+  if (import.meta.env.DEV) {
+    return true
   }
 
-  if (data) {
-    return buildProfilePayload(data)
-  }
-
-  throw createAuthError('O perfil da conta nao foi inicializado corretamente.')
+  return normalizeIdentifier(import.meta.env.VITE_ENABLE_DEMO_SHORTCUT) === 'true'
 }
 
-const resolveCurrentAuthState = async () => {
-  const { data, error } = await supabase.auth.getSession()
-
-  if (error) {
-    throw createAuthError('Nao foi possivel restaurar a sessao atual.', error)
+export const getDemoShortcutHint = (role) => {
+  if (!isDemoShortcutEnabled()) {
+    return null
   }
 
-  const authSession = data?.session
-  const authUser = authSession?.user
+  return `Atalho demo liberado: ${DEMO_ALIAS}/${DEMO_ALIAS} (${role})`
+}
 
-  if (!authUser) {
-    return {
-      authUser: null,
-      profileRecord: null,
-      session: null,
-    }
+export const isPasswordRecoveryFlow = () => {
+  if (typeof window === 'undefined') {
+    return false
   }
 
-  const profileRecord = await ensureOwnProfile(authUser)
+  return window.location.hash.includes('type=recovery')
+}
 
-  return {
-    authUser,
-    profileRecord,
-    session: buildSessionPayload({ user: authUser, profileRecord }),
+export const clearPasswordRecoveryHash = () => {
+  if (typeof window === 'undefined' || !window.location.hash) {
+    return
   }
+
+  window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`)
 }
 
 export async function getAuthSession() {
-  return resolveCurrentAuthState()
+  try {
+    const payload = await apiRequest({
+      path: '/auth/session',
+    })
+
+    return normalizeAuthPayload(payload)
+  } catch (error) {
+    throw createAuthError('Nao foi possivel restaurar a sessao atual.', error)
+  }
 }
 
 export async function loginWithCredentials({ formData, profile }) {
@@ -180,23 +144,21 @@ export async function loginWithCredentials({ formData, profile }) {
     password: formData?.password,
   })
 
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  })
+  try {
+    const payload = await apiRequest({
+      body: {
+        email,
+        password,
+        profile: normalizeRole(profile),
+      },
+      method: 'POST',
+      path: '/auth/login',
+    })
 
-  if (error) {
+    return normalizeAuthPayload(payload)
+  } catch (error) {
     throw createAuthError('Nao foi possivel entrar com essas credenciais.', error)
   }
-
-  const authState = await resolveCurrentAuthState()
-
-  if (!authState.session || authState.session.profile !== normalizeRole(profile)) {
-    await supabase.auth.signOut()
-    throw createAuthError('Esta conta nao pertence ao perfil selecionado.')
-  }
-
-  return authState
 }
 
 export async function registerAccount({ email, fullName, password, profile }) {
@@ -217,43 +179,43 @@ export async function registerAccount({ email, fullName, password, profile }) {
     throw createAuthError('Informe uma senha para criar a conta.')
   }
 
-  const { data, error } = await supabase.auth.signUp({
-    email: normalizedEmail,
-    password: normalizedPassword,
-    options: {
-      data: {
-        full_name: normalizedFullName,
-        role: normalizedRole,
+  try {
+    const payload = await apiRequest({
+      body: {
+        email: normalizedEmail,
+        fullName: normalizedFullName,
+        password: normalizedPassword,
+        profile: normalizedRole,
       },
-      emailRedirectTo: buildRedirectUrl('/login'),
-    },
-  })
+      method: 'POST',
+      path: '/auth/register',
+    })
 
-  if (error) {
-    throw createAuthError('Nao foi possivel criar a conta agora.', error)
-  }
-
-  if (!data.session || !data.user) {
-    return {
-      email: normalizedEmail,
-      requiresEmailConfirmation: true,
-      session: null,
+    if (payload?.requiresEmailConfirmation) {
+      return {
+        email: normalizeValue(payload.email || normalizedEmail),
+        requiresEmailConfirmation: true,
+        session: null,
+      }
     }
-  }
 
-  const authState = await resolveCurrentAuthState()
-
-  return {
-    ...authState,
-    email: normalizedEmail,
-    requiresEmailConfirmation: false,
+    return {
+      ...normalizeAuthPayload(payload),
+      email: normalizedEmail,
+      requiresEmailConfirmation: false,
+    }
+  } catch (error) {
+    throw createAuthError('Nao foi possivel criar a conta agora.', error)
   }
 }
 
 export async function logoutSession() {
-  const { error } = await supabase.auth.signOut()
-
-  if (error) {
+  try {
+    await apiRequest({
+      method: 'POST',
+      path: '/auth/logout',
+    })
+  } catch (error) {
     throw createAuthError('Nao foi possivel encerrar a sessao atual.', error)
   }
 }
@@ -265,16 +227,20 @@ export async function requestPasswordRecovery(email) {
     throw createAuthError('Informe um e-mail valido para recuperar a senha.')
   }
 
-  const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
-    redirectTo: buildRedirectUrl('/login'),
-  })
+  try {
+    await apiRequest({
+      body: {
+        email: normalizedEmail,
+      },
+      method: 'POST',
+      path: '/auth/recover',
+    })
 
-  if (error) {
+    return {
+      email: normalizedEmail,
+    }
+  } catch (error) {
     throw createAuthError('Nao foi possivel enviar o link de recuperacao.', error)
-  }
-
-  return {
-    email: normalizedEmail,
   }
 }
 

@@ -1,326 +1,190 @@
-# Stack Reference — Sinapse
+# Stack reference — Sinapse
 
-Referência técnica de cada biblioteca usada. Para cada uma: versão, como é
-usada no projeto, padrões adotados e o que evitar.
-
----
+Este documento registra como cada biblioteca importante é usada no runtime
+atual. A ideia não é listar tudo o que existe no `package.json`, mas mostrar o
+que sustenta a aplicação e quais padrões o repositório espera.
 
 ## React 19
 
-**Versão:** 19.2.5 | **Docs:** react.dev
+**Versão:** `19.2.5`
 
-### Como é usado
-- Functional components exclusivamente. Zero class components.
-- `createContext` + `useContext` para estado compartilhado dentro de cada shell.
-- `lazy()` + `<Suspense>` para code splitting dos módulos de feature.
-- Hooks: `useState`, `useEffect`, `useRef`, `useMemo`, `useCallback` (conforme necessário).
+React continua sendo a base de renderização do projeto.
 
-### Padrões adotados
+- Functional components exclusivamente.
+- `lazy()` + `Suspense` para dividir os módulos dos shells.
+- `AppErrorBoundary` envolve a árvore inteira em `src/App.jsx`.
+- `AppContext` e `TeacherContext` ainda sustentam a navegação interna dos
+  shells.
 
-```jsx
-// Context pattern (AppContext em StudentShell.jsx, TeacherContext em TeacherShell.jsx)
-const AppContext = createContext();
-const AppProvider = ({ children, initialView }) => { ... };
-const useApp = () => useContext(AppContext); // hook de acesso
+Evite:
 
-// Lazy loading de módulo de feature
-const CalendarView = lazy(() => import('./CalendarView.jsx'));
-
-// Suspense com fallback mínimo
-<Suspense fallback={<div className="...">Carregando módulo...</div>}>
-  {currentView === 'calendario' && <CalendarView />}
-</Suspense>
-```
-
-### O que evitar
-- `useEffect` para sincronizar estado derivado (use `useMemo` ou cálculo direto no render).
-- Mutação direta de estado (`state.items.push(x)` → use spread ou `.map()`).
-- Dependências ausentes ou excessivas no array de `useEffect`.
-- `forwardRef` sem necessidade real.
-
----
+- usar `useEffect` para sincronizar estado derivado;
+- colocar lógica de dados direto no JSX;
+- introduzir class components fora do error boundary existente.
 
 ## Vite 8
 
-**Versão:** 8.0.8 | **Docs:** vitejs.dev
+**Versão:** `8.0.8`
 
-### Como é usado
-- Dev server com HMR em `http://localhost:5173`.
-- Build de produção com tree-shaking e code splitting automático.
-- `@vitejs/plugin-react` para suporte a JSX/Fast Refresh.
+Vite é o bundler e o dev server do frontend.
 
-### Configuração atual (`vite.config.js`)
-Configuração mínima com o plugin React. Sem aliases, sem proxies, sem env vars customizadas.
+- `npm run dev` sobe apenas a aplicação Vite.
+- `npm run build` valida imports, JSX e gera o bundle de produção.
+- `npm run preview` serve o build local.
 
-### Comandos
-```bash
-npm run dev      # inicia dev server
-npm run build    # build de produção em /dist
-npm run preview  # preview do /dist em localhost
-```
-
-### Variáveis de ambiente
-O projeto usa `.env.example` como template e espera credenciais locais em
-`.env.local` quando você quiser habilitar contas demo seedadas.
-
-- Apenas variáveis `VITE_*` ficam disponíveis no cliente.
-- Não trate `VITE_*` como segredo de produção. Tudo que entra no bundle pode ser
-  inspecionado no navegador.
-- Quando contas demo do aluno existem, o login do aluno valida essas
-  credenciais. Sem essas contas, o shell do aluno volta ao modo demo aberto com
-  qualquer combinação não vazia. O shell do professor permanece aberto em modo
-  demo.
-- Use `.env.local` para setup local e mantenha senhas reais fora do frontend.
-
-### O que evitar
-- Não use `import.meta.env` sem definir a variável correspondente em `.env.local`
-  ou no ambiente de build.
-- Não configure `base` no `vite.config.js` sem entender o impacto nas rotas do React Router.
-- Não ignore warnings de "missing export" — eles viram erros em produção.
-
----
+Importante: o runtime `/api/*` não é servido automaticamente por Vite. Para
+testar auth e dados reais durante o desenvolvimento, você precisa usar
+`VITE_API_BASE_URL` apontando para um backend já publicado ou rodar o projeto
+via `vercel dev`.
 
 ## React Router 7
 
-**Versão:** 7.14.1 | **Docs:** reactrouter.com
+**Versão:** `7.14.1`
 
-### Como é usado
-No projeto, o React Router cuida apenas do **roteamento entre shells**. A
-navegação *dentro* de cada shell é gerenciada por estado local (`currentView`
-em `AppContext` ou `TeacherContext`).
+O roteador só cuida das superfícies públicas e dos shells.
 
-```
-Rotas reais (React Router):
-  /login        → LoginPage
-  /aluno        → StudentShellPage
-  /professor    → TeacherShellPage
+- `/` e `/login` renderizam `LoginPage`.
+- `/aluno` e `/professor` passam pelos layouts autenticados.
+- rotas legadas `/modulos/*` redirecionam para `?view=` no shell do aluno.
 
-Navegação interna (estado):
-  AppContext.navigate('raio-x')  →  muda currentView → URL vira /aluno?view=raio-x
-  TeacherContext.navigate('planner') → muda currentView → URL vira /professor?view=planner
-```
+Os layouts saneiam `?view=` e evitam que uma sessão do aluno abra uma view
+escondida ou que um professor entre no shell errado.
 
-### Query param sync
-`StudentShellPage` e `TeacherShellPage` leem `?view=` via `useSearchParams()`,
-resolvem a sessão, saneiam valores inválidos e injetam `initialView` no shell.
-Quando a view do aluno pertence a outro slice (`ai-tools/` ou
-`assessments/`), o wrapper também monta o mapa de lazy imports e o passa para
-`StudentShell.jsx`. O shell não escreve diretamente na URL, o wrapper cuida
-disso e também espelha a view ativa de volta na query string.
+Evite criar uma rota nova para cada módulo interno do shell. A convenção do
+projeto continua sendo `currentView`.
 
-### O que evitar
-- Não crie rotas novas em `src/routes/AppRoutes.jsx` para views internas dos shells. Use o sistema de
-  `currentView`.
-- Não use `useNavigate()` dentro dos shells — os shells não conhecem o roteador.
-- Não use `<Link>` para navegação interna dos shells.
+## Zustand 5
 
----
+**Versão:** `5.0.8`
+
+Zustand é o estado compartilhado já consolidado no runtime atual.
+
+- `sessionSlice.js` guarda `authStatus`, `session`, `profileRecord` e
+  `authUser`.
+- `uiSlice.js` guarda o estado de sidebar dos dois shells.
+- `src/lib/useAuth.js` hidrata o store e expõe as actions de auth.
+
+Hoje o store cobre auth, sessão e UI básica. A navegação interna dos shells
+ainda não migrou para cá.
+
+## Supabase
+
+**Bibliotecas:** `@supabase/ssr@0.10.2` e `@supabase/supabase-js@2.103.3`
+
+Supabase já atende o runtime real de autenticação e parte do domínio do aluno.
+
+### Browser
+
+`src/lib/supabase/client.js` usa `createBrowserClient()` para:
+
+- escutar `onAuthStateChange()`;
+- atualizar a senha no fluxo de recuperação.
+
+### Server
+
+`src/server/api/supabase.js` usa `createServerClient()` para:
+
+- ler cookies da sessão nos handlers de `/api`;
+- escrever `set-cookie` de volta na response;
+- falar com `profiles`, `student_notifications`, `student_revisions` e
+  `student_mock_exams`.
+
+### Migrations
+
+O schema de runtime atual está em:
+
+- `supabase/migrations/20260419015808_auth_runtime_v1.sql`
+
+Esse arquivo cria `profiles`, tabelas do aluno, trigger de novo usuário,
+índices e políticas RLS.
+
+## Runtime `/api` em Vercel
+
+O backend do projeto roda como função Vercel.
+
+- `api/[...path].js` adapta o request Node da Vercel para `Request`.
+- `src/server/api/router.js` resolve método e segmento de rota.
+- `src/server/api/http.js` padroniza respostas e parsing.
+- `src/services/api.js` usa `/api` como base padrão e mantém cache TTL de
+  30 segundos para leituras.
+
+`vercel.json` também reescreve qualquer deep link para `index.html`, o que
+mantém o fluxo de confirmação de e-mail do Supabase em `/login?code=...`.
 
 ## Tailwind CSS 3
 
-**Versão:** 3.4.17 | **Docs:** tailwindcss.com
+**Versão:** `3.4.17`
 
-### Como é usado
-**100% das classes de estilo são Tailwind.** Sem CSS modules, sem styled-components,
-sem CSS-in-JS. A única exceção é `pb-safe` definida em `src/index.css` para
-safe area em mobile.
+Tailwind continua sendo a única superfície de styling autorizada.
 
-### Content paths configurados (`tailwind.config.js`)
-```js
-content: [
-  './index.html',
-  './src/**/*.{js,jsx}',
-  './legacy/**/*.{js,jsx}',        // ← mantido por compatibilidade enquanto o diretório existir
-]
-```
+- zero CSS modules;
+- zero styled-components;
+- `src/index.css` existe só para base global e `pb-safe`;
+- `tailwindcss-animate` cobre a maior parte das animações simples.
 
-Se criar código fora de `src/` ou fora dos caminhos já cobertos, adicione o
-glob correspondente aqui.
+Evite valores arbitrários sem necessidade e não crie abstrações com `@apply`.
 
-### Plugins
-`tailwindcss-animate` — fornece utilitários `animate-in`, `fade-in`, `zoom-in-95`,
-`slide-in-from-bottom-4`, etc. usados nas animações de entrada das views.
+## Vitest + Testing Library
 
-### Padrões adotados
+**Versões:** `vitest@4.1.4`, `@testing-library/react@16.3.2`,
+`@testing-library/user-event@14.6.1`
 
-```jsx
-// Classes condicionais com template literal
-className={`flex items-center ${isActive ? 'text-blue-600' : 'text-slate-400'}`}
+O projeto já tem cobertura de regressão para os pontos mais críticos da
+integração recente.
 
-// Animação de entrada de view
-<div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+- `src/services/auth.test.js` cobre o contrato do serviço de auth.
+- `src/services/student.test.js` cobre cache e invalidação do serviço do aluno.
+- `src/features/student/Revisions.test.jsx` cobre CRUD da view de revisões.
+- `src/features/assessments/Simulados.test.jsx` cobre CRUD da view de simulados.
+- `src/components/AppErrorBoundary.test.jsx` cobre o fallback global.
+- `src/vercel-config.test.js` protege a rewrite de SPA na Vercel.
 
-// Glassmorphism (Card padrão)
-className="bg-white/80 backdrop-blur-md border border-slate-200/60 shadow-sm rounded-2xl"
-
-// Safe area mobile
-className="pb-safe"   // definida em index.css como padding-bottom: env(safe-area-inset-bottom)
-```
-
-### Escala de cores do projeto
-Ver `CLAUDE.md → Identidade visual`. Em resumo: `blue-900` (aluno primário),
-`yellow-400` (aluno acento), `indigo-600` (professor).
-
-### O que evitar
-- Valores arbitrários sem necessidade: `text-[#1e293b]` → use `text-slate-800`.
-- `@apply` para criar abstrações — use componentes React.
-- Misturar `hover:` com `:hover` em CSS customizado.
-- Classes longas não divididas em múltiplas linhas (dificulta leitura e review).
-
----
+Use `npm run test` como verificação mínima antes de publicar mudanças.
 
 ## Lucide React
 
-**Versão:** 1.8.0 | **Docs:** lucide.dev
+**Versão:** `1.8.0`
 
-### Como é usado
-Todos os ícones do projeto. Zero SVGs inline, zero imagens de ícone.
+Lucide é a biblioteca oficial de ícones do projeto.
 
-```jsx
-import { Bell, Star, CheckCircle2, Settings2 } from 'lucide-react';
+- importe apenas os ícones usados;
+- confirme o nome em `lucide.dev` antes de editar;
+- use `fill=\"currentColor\"` só quando quiser de fato um ícone preenchido.
 
-<Bell size={20} className="text-slate-500" />
-<Star size={16} className="text-yellow-400 fill-yellow-400" />
-```
-
-### Tamanhos padrão por contexto
-
-| Contexto | `size` |
-|----------|--------|
-| Navegação lateral | 20 |
-| Header / notificações | 20 |
-| Cards KPI | 24 |
-| Modais (header) | 18 |
-| Badges / inline | 14–16 |
-| Ilustração / empty state | 48–56 |
-
-### Ícones usados no projeto (referência rápida)
-
-```
-Home, Activity, Calendar, Clock, BookOpen, RotateCcw, CheckSquare,
-TrendingUp, Menu, X, Bell, Zap, Play, Search, CheckCircle2, AlertCircle,
-Clock3, ChevronRight, BookMarked, Target, BarChart2, FileText, PenTool,
-Heart, HeartHandshake, Users, Sparkles, Settings, Settings2, HelpCircle,
-LogOut, Star, Mail, Copy, Check, Send, Award, GraduationCap, Briefcase,
-MessageSquare, TrendingUp, Activity
-```
-
-### O que evitar
-- Nomes inexistentes: `CheckCircle` existe, mas `CheckCircleFill` não.
-- Importar o pacote inteiro (`import * as Icons`).
-- Usar `className="fill-current"` em ícones outline (muda o visual).
-
----
-
-## Framer Motion
-
-**Versão:** 12.38.0 | **Docs:** framer.com/motion
-
-### Como é usado
-**Atualmente subutilizado.** O projeto usa `tailwindcss-animate` para a maioria
-das animações de entrada. Framer Motion está disponível para animações mais
-complexas (transições de layout, drag, gestures).
-
-### Quando usar
-- Animações de layout (`<AnimatePresence>` + `<motion.div layout>`).
-- Transições de entrada/saída com spring physics.
-- Gestures (drag, hover com spring).
-
-### Quando NÃO usar
-- Animações simples de fade/slide de entrada — use `animate-in` do Tailwind.
-- Toggle de visibilidade — use conditional rendering + `animate-in`.
-
-### Exemplo de uso quando necessário
-```jsx
-import { motion, AnimatePresence } from 'framer-motion';
-
-<AnimatePresence>
-  {open && (
-    <motion.div
-      initial={{ opacity: 0, y: -8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.2 }}
-    >
-      {children}
-    </motion.div>
-  )}
-</AnimatePresence>
-```
-
----
+Evite `import * as Icons from 'lucide-react'`.
 
 ## Recharts
 
-**Versão:** 3.8.1 | **Docs:** recharts.org
+**Versão:** `3.8.1`
 
-### Como é usado
-Disponível para gráficos mais complexos (ex.: linha de progresso ao longo do tempo,
-radar de diagnóstico por área). Ainda não utilizado amplamente — o projeto prefere
-barras simples em Tailwind (ver `RaioXSection` em `StudentFeatures.jsx`).
+Recharts está disponível para gráficos mais densos, mas o produto ainda prefere
+renderizações simples em Tailwind quando isso resolve o problema.
 
-### Quando usar
-- Série temporal (progresso ao longo de semanas/meses).
-- Radar chart (diagnóstico multidimensional).
-- Quando os dados têm > 5 pontos e precisam de legenda e tooltip.
-
-### Quando NÃO usar
-- Listas rankeadas simples → use barra Tailwind (`<div style={{ width: '85%' }}`).
-- KPI único → use número grande com label.
-- Comparação binária → use progress bar.
-
-### Componentes mais úteis para o contexto educacional
-```jsx
-import { LineChart, Line, BarChart, Bar, RadarChart, Radar,
-         XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-
-// Sempre envolva em ResponsiveContainer para responsividade
-<ResponsiveContainer width="100%" height={200}>
-  <LineChart data={data}>
-    <CartesianGrid strokeDasharray="3 3" />
-    <XAxis dataKey="semana" />
-    <YAxis />
-    <Tooltip />
-    <Line type="monotone" dataKey="acertos" stroke="#3b82f6" />
-  </LineChart>
-</ResponsiveContainer>
-```
-
----
+Use Recharts quando houver série temporal, comparação com tooltip ou gráfico
+multidimensional. Para barras simples, `StudentFeatures.jsx` continua sendo a
+referência.
 
 ## date-fns
 
-**Versão:** 4.1.0 | **Docs:** date-fns.org
+**Versão:** `4.1.0`
 
-### Como é usado
-Manipulação de datas nos módulos de Calendário e Cronograma. Também usado para
-calcular dias até o ENEM/FUVEST.
+Date-fns é a base das telas de calendário e cronograma.
 
-### Imports mais comuns no projeto
-```js
-import { format, addDays, differenceInDays, isToday, isBefore, startOfWeek } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+- use `new Date(YYYY, MM - 1, DD)` para datas fixas de vestibular;
+- trate comparações de dia com cuidado para evitar `off-by-one` de timezone.
 
-format(new Date(), "d 'de' MMMM", { locale: ptBR }) // "17 de abril"
-differenceInDays(new Date('2026-11-08'), new Date())  // dias até o ENEM
-```
+## Framer Motion
 
-### Importante
-`date-fns` não faz timezone awareness por padrão. Se comparar datas de vestibular
-(que são datas fixas, sem hora), sempre construa com `new Date(YYYY, MM-1, DD)` para
-evitar off-by-one de UTC vs horário local.
+**Versão:** `12.38.0`
 
----
+Framer Motion permanece disponível, mas não é a primeira escolha para
+animações simples. Use quando precisar de layout transitions, presença ou
+gestures. Para fade e slide de entrada, prefira Tailwind.
 
-## Fontes (Google Fonts)
+## Observabilidade Vercel
 
-Definidas em `src/index.css` via `@import`:
+**Bibliotecas:** `@vercel/analytics@2.0.1`,
+`@vercel/speed-insights@2.0.0`
 
-| Fonte | Uso | Pesos carregados |
-|-------|-----|-----------------|
-| `Fraunces` (serif) | Headings de destaque, banners | 500, 600, 700 |
-| `Manrope` (sans-serif) | Corpo de texto, labels, UI | 400, 600, 700, 800 |
-
-A fonte de UI padrão do Tailwind (`font-sans`) aponta para `Manrope` via
-`font-family` no `:root` de `index.css`. Use `font-serif` (ou classe customizada)
-para `Fraunces` em headings de impacto.
+Ambas são montadas diretamente em `src/App.jsx`. Não espalhe esses componentes
+por views ou shells.
