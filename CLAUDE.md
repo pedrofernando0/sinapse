@@ -201,7 +201,8 @@ padding. Para adicionar banner/header a um módulo imersivo, use `position: stic
 4. Em `src/features/student/StudentShell.jsx`, adicione a entrada em
    `VIEW_TITLES`, `NAVIGATION_SECTIONS`, `IMMERSIVE_VIEWS` (se aplicável) e no
    bloco de renderização correspondente.
-5. Atualize `docs/ARCHITECTURE.md` e `docs/SPRINTS.md`.
+5. Atualize `docs/ARCHITECTURE.md` e `docs/SPRINTS.md`, mantendo o backlog
+   pendente limpo e sem itens concluídos.
 
 ---
 

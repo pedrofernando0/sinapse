@@ -11,17 +11,16 @@ usada no projeto, padrões adotados e o que evitar.
 
 ### Como é usado
 - Functional components exclusivamente. Zero class components.
-- `createContext` + `useContext` para estado compartilhado dentro de cada shell.
+- Zustand para estado compartilhado de sessão e navegação dos shells.
 - `lazy()` + `<Suspense>` para code splitting dos módulos de feature.
 - Hooks: `useState`, `useEffect`, `useRef`, `useMemo`, `useCallback` (conforme necessário).
 
 ### Padrões adotados
 
 ```jsx
-// Context pattern (AppContext em StudentShell.jsx, TeacherContext em TeacherShell.jsx)
-const AppContext = createContext();
-const AppProvider = ({ children, initialView }) => { ... };
-const useApp = () => useContext(AppContext); // hook de acesso
+// Zustand selector pattern
+const currentView = useAppStore((state) => state.studentCurrentView);
+const navigate = useAppStore((state) => state.navigateStudentShell);
 
 // Lazy loading de módulo de feature
 const CalendarView = lazy(() => import('./CalendarView.jsx'));
@@ -60,17 +59,16 @@ npm run preview  # preview do /dist em localhost
 ```
 
 ### Variáveis de ambiente
-O projeto usa `.env.example` como template e espera credenciais locais em
-`.env.local` quando você quiser habilitar contas demo seedadas.
+O projeto usa `.env.example` como template. O cliente consome `VITE_*` e o
+runtime server-side do Vercel consome variáveis como `SUPABASE_URL` e
+`SUPABASE_PUBLISHABLE_KEY`.
 
 - Apenas variáveis `VITE_*` ficam disponíveis no cliente.
 - Não trate `VITE_*` como segredo de produção. Tudo que entra no bundle pode ser
   inspecionado no navegador.
-- Quando contas demo do aluno existem, o login do aluno valida essas
-  credenciais. Sem essas contas, o shell do aluno volta ao modo demo aberto com
-  qualquer combinação não vazia. O shell do professor permanece aberto em modo
-  demo.
-- Use `.env.local` para setup local e mantenha senhas reais fora do frontend.
+- Sessão, credenciais e refresh token não ficam no frontend; o cliente fala com
+  `/api/*` e o servidor faz a ponte com o Supabase.
+- Use `.env.local` para setup local e mantenha segredos reais fora do bundle.
 
 ### O que evitar
 - Não use `import.meta.env` sem definir a variável correspondente em `.env.local`
@@ -86,8 +84,8 @@ O projeto usa `.env.example` como template e espera credenciais locais em
 
 ### Como é usado
 No projeto, o React Router cuida apenas do **roteamento entre shells**. A
-navegação *dentro* de cada shell é gerenciada por estado local (`currentView`
-em `AppContext` ou `TeacherContext`).
+navegação *dentro* de cada shell é gerenciada por Zustand (`studentCurrentView`
+e `teacherCurrentView`), com sincronização em `?view=`.
 
 ```
 Rotas reais (React Router):
@@ -96,8 +94,8 @@ Rotas reais (React Router):
   /professor    → TeacherShellPage
 
 Navegação interna (estado):
-  AppContext.navigate('raio-x')  →  muda currentView → URL vira /aluno?view=raio-x
-  TeacherContext.navigate('planner') → muda currentView → URL vira /professor?view=planner
+  navigateStudentShell('raio-x')     → muda currentView → URL vira /aluno?view=raio-x
+  navigateTeacherShell('planner')    → muda currentView → URL vira /professor?view=planner
 ```
 
 ### Query param sync

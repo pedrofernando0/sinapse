@@ -1,19 +1,33 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   Calendar,
   CheckCircle2,
   Circle,
   Edit2,
+  Loader2,
   Plus,
   Trash2,
   X,
 } from 'lucide-react';
+import {
+  createStudentRevision,
+  deleteStudentRevision,
+  getStudentRevisions,
+  updateStudentRevision,
+} from '../../services/student.js';
+
+const formatDateInput = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const getRelativeDate = (daysOffset) => {
   const date = new Date();
   date.setDate(date.getDate() + daysOffset);
-  return date.toISOString().split('T')[0];
+  return formatDateInput(date);
 };
 
 const getToday = () => getRelativeDate(0);
@@ -38,33 +52,33 @@ const Card = ({ children, className = '' }) => (
 );
 
 const EMPTY_STATES = {
-  hoje: {
-    icon: CheckCircle2,
-    iconClass: 'text-teal-400',
-    title: 'Dia livre de revisões!',
-    message: 'Ótimo momento para adiantar um novo tópico ou fazer um simulado.',
-    cta: 'Agendar revisão para hoje',
-  },
   atrasadas: {
+    cta: null,
     icon: CheckCircle2,
     iconClass: 'text-teal-400',
-    title: 'Nenhuma revisão atrasada!',
     message: 'Você está em dia com tudo. Continue assim!',
-    cta: null,
-  },
-  proximas: {
-    icon: Calendar,
-    iconClass: 'text-blue-300',
-    title: 'Sem revisões agendadas',
-    message: 'Programe as próximas revisões para manter o ritmo da curva de memória.',
-    cta: 'Agendar próxima revisão',
+    title: 'Nenhuma revisão atrasada!',
   },
   concluidas: {
+    cta: null,
     icon: CheckCircle2,
     iconClass: 'text-slate-300',
-    title: 'Nenhuma revisão concluída ainda',
     message: 'Complete uma revisão e ela aparecerá aqui.',
-    cta: null,
+    title: 'Nenhuma revisão concluída ainda',
+  },
+  hoje: {
+    cta: 'Agendar revisão para hoje',
+    icon: CheckCircle2,
+    iconClass: 'text-teal-400',
+    message: 'Ótimo momento para adiantar um novo tópico ou fazer um simulado.',
+    title: 'Dia livre de revisões!',
+  },
+  proximas: {
+    cta: 'Agendar próxima revisão',
+    icon: Calendar,
+    iconClass: 'text-blue-300',
+    message: 'Programe as próximas revisões para manter o ritmo da curva de memória.',
+    title: 'Sem revisões agendadas',
   },
 };
 
@@ -79,123 +93,160 @@ const EmptyRevisions = ({ filter, onAdd }) => {
       </div>
       <h3 className="text-lg font-bold text-slate-800">{config.title}</h3>
       <p className="mt-1 max-w-xs text-sm text-slate-500">{config.message}</p>
-      {config.cta && (
+      {config.cta ? (
         <button
+          type="button"
           onClick={onAdd}
           className="mt-6 flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-blue-500/20 transition-all hover:bg-blue-700 active:scale-95"
         >
           <Plus size={16} />
           {config.cta}
         </button>
-      )}
+      ) : null}
     </div>
   );
 };
 
+const INITIAL_FORM = {
+  date: getToday(),
+  id: null,
+  subject: SUBJECTS[0],
+  topic: '',
+};
+
 export default function Revisions() {
-  const [revisions, setRevisions] = useState([
-    { id: 1, subject: 'Matemática', topic: 'Geometria Espacial', date: getToday(), status: 'pending' },
-    { id: 2, subject: 'Biologia', topic: 'Ecologia (Relações)', date: getRelativeDate(-2), status: 'done' },
-    { id: 3, subject: 'Química', topic: 'Estequiometria', date: getRelativeDate(-1), status: 'pending' },
-    { id: 4, subject: 'Física', topic: 'Eletrodinâmica', date: getRelativeDate(2), status: 'pending' },
-  ]);
+  const [revisions, setRevisions] = useState([]);
+  const [status, setStatus] = useState('loading');
+  const [errorMessage, setErrorMessage] = useState('');
   const [filter, setFilter] = useState('hoje');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
-  const [completingIds, setCompletingIds] = useState([]);
-  const [formData, setFormData] = useState({
-    id: null,
-    subject: SUBJECTS[0],
-    topic: '',
-    date: getToday(),
-  });
+  const [isSaving, setIsSaving] = useState(false);
+  const [formData, setFormData] = useState(INITIAL_FORM);
+
+  const loadRevisions = async () => {
+    setStatus('loading');
+    setErrorMessage('');
+
+    try {
+      const response = await getStudentRevisions();
+      setRevisions(response);
+      setStatus('success');
+    } catch (error) {
+      setErrorMessage(error.message || 'Não foi possível carregar as revisões.');
+      setStatus('error');
+    }
+  };
+
+  useEffect(() => {
+    loadRevisions();
+  }, []);
 
   const openModal = (revision = null) => {
-    setFormData(
-      revision ?? {
-        id: null,
-        subject: SUBJECTS[0],
-        topic: '',
-        date: getToday(),
-      },
-    );
+    setFormData(revision ?? INITIAL_FORM);
     setIsModalOpen(true);
   };
 
-  const closeModal = () => setIsModalOpen(false);
+  const closeModal = () => {
+    setFormData(INITIAL_FORM);
+    setIsModalOpen(false);
+  };
 
-  const handleSave = (event) => {
+  const handleSave = async (event) => {
     event.preventDefault();
 
     if (!formData.topic.trim()) {
       return;
     }
 
-    if (formData.id) {
-      setRevisions((currentRevisions) =>
-        currentRevisions.map((revision) =>
-          revision.id === formData.id
-            ? { ...formData, status: revision.status }
-            : revision,
-        ),
-      );
-    } else {
-      setRevisions((currentRevisions) => [
-        ...currentRevisions,
-        { ...formData, id: Date.now(), status: 'pending' },
-      ]);
-    }
+    setIsSaving(true);
 
-    closeModal();
+    try {
+      if (formData.id) {
+        const currentRevision = revisions.find((revision) => revision.id === formData.id);
+        const updatedRevisionResponse = await updateStudentRevision(formData.id, formData);
+        const updatedRevision = {
+          ...updatedRevisionResponse,
+          status: formData.status ?? currentRevision?.status ?? updatedRevisionResponse.status,
+        };
+
+        setRevisions((currentRevisions) =>
+          currentRevisions.map((revision) =>
+            revision.id === formData.id ? updatedRevision : revision,
+          ),
+        );
+      } else {
+        const createdRevision = await createStudentRevision(formData);
+        setRevisions((currentRevisions) => [...currentRevisions, createdRevision]);
+      }
+
+      closeModal();
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
+    if (!itemToDelete) {
+      return;
+    }
+
+    await deleteStudentRevision(itemToDelete);
     setRevisions((currentRevisions) =>
       currentRevisions.filter((revision) => revision.id !== itemToDelete),
     );
     setItemToDelete(null);
   };
 
-  const toggleStatus = (id, currentStatus) => {
-    if (currentStatus === 'pending') {
-      setCompletingIds((currentIds) => [...currentIds, id]);
-
-      window.setTimeout(() => {
-        setRevisions((currentRevisions) =>
-          currentRevisions.map((revision) =>
-            revision.id === id ? { ...revision, status: 'done' } : revision,
-          ),
-        );
-        setCompletingIds((currentIds) => currentIds.filter((currentId) => currentId !== id));
-      }, 600);
-
-      return;
-    }
+  const toggleStatus = async (revision) => {
+    const nextStatus = revision.status === 'done' ? 'pending' : 'done';
+    const updatedRevision = await updateStudentRevision(revision.id, {
+      ...revision,
+      status: nextStatus,
+    });
 
     setRevisions((currentRevisions) =>
-      currentRevisions.map((revision) =>
-        revision.id === id ? { ...revision, status: 'pending' } : revision,
+      currentRevisions.map((currentRevision) =>
+        currentRevision.id === revision.id ? updatedRevision : currentRevision,
       ),
     );
   };
 
   const today = getToday();
-  const filteredRevisions = revisions
-    .filter((revision) => {
-      if (filter === 'concluidas') return revision.status === 'done';
-      if (revision.status === 'done') return false;
-      if (filter === 'hoje') return revision.date === today;
-      if (filter === 'atrasadas') return revision.date < today;
-      if (filter === 'proximas') return revision.date > today;
-      return true;
-    })
-    .sort((firstRevision, secondRevision) => new Date(firstRevision.date) - new Date(secondRevision.date));
+  const filteredRevisions = useMemo(
+    () =>
+      revisions
+        .filter((revision) => {
+          if (filter === 'concluidas') {
+            return revision.status === 'done';
+          }
+
+          if (filter === 'hoje') {
+            return revision.date === today;
+          }
+
+          if (filter === 'atrasadas') {
+            return revision.date < today;
+          }
+
+          if (filter === 'proximas') {
+            return revision.date > today;
+          }
+
+          return true;
+        })
+        .sort(
+          (firstRevision, secondRevision) =>
+            new Date(firstRevision.date) - new Date(secondRevision.date),
+        ),
+    [filter, revisions, today],
+  );
 
   const counts = {
-    hoje: revisions.filter((revision) => revision.date === today && revision.status !== 'done').length,
     atrasadas: revisions.filter((revision) => revision.date < today && revision.status !== 'done').length,
-    proximas: revisions.filter((revision) => revision.date > today && revision.status !== 'done').length,
     concluidas: revisions.filter((revision) => revision.status === 'done').length,
+    hoje: revisions.filter((revision) => revision.date === today && revision.status !== 'done').length,
+    proximas: revisions.filter((revision) => revision.date > today && revision.status !== 'done').length,
   };
 
   return (
@@ -208,6 +259,7 @@ export default function Revisions() {
           </p>
         </div>
         <button
+          type="button"
           onClick={() => openModal()}
           className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 font-bold text-white shadow-md shadow-blue-500/20 transition-all duration-200 hover:bg-blue-700 active:scale-95"
         >
@@ -218,124 +270,127 @@ export default function Revisions() {
 
       <div className="no-scrollbar flex w-full overflow-x-auto rounded-xl bg-slate-100 p-1.5 shadow-inner">
         {[
-          { id: 'hoje', label: 'Hoje', count: counts.hoje, color: 'text-orange-600', activeClass: 'bg-white text-orange-600 shadow-sm' },
-          { id: 'atrasadas', label: 'Atrasadas', count: counts.atrasadas, color: 'text-red-600', activeClass: 'bg-white text-red-600 shadow-sm' },
-          { id: 'proximas', label: 'Próximas', count: counts.proximas, color: 'text-blue-600', activeClass: 'bg-white text-blue-600 shadow-sm' },
-          { id: 'concluidas', label: 'Concluídas', count: counts.concluidas, color: 'text-teal-600', activeClass: 'bg-white text-teal-600 shadow-sm' },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setFilter(tab.id)}
-            className={`flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-5 py-2.5 text-sm font-bold transition-all duration-200 active:scale-95 md:flex-none ${
-              filter === tab.id
-                ? tab.activeClass
-                : 'text-slate-500 hover:bg-slate-200/50 hover:text-slate-800'
-            }`}
-          >
-            {tab.label}
-            {tab.count > 0 ? (
+          { id: 'hoje', label: 'Hoje' },
+          { id: 'atrasadas', label: 'Atrasadas' },
+          { id: 'proximas', label: 'Próximas' },
+          { id: 'concluidas', label: 'Concluídas' },
+        ].map((tab) => {
+          const isActive = filter === tab.id;
+
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setFilter(tab.id)}
+              className={`flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-5 py-2.5 text-sm font-bold transition-all duration-200 active:scale-95 md:flex-none ${
+                isActive
+                  ? 'bg-white text-orange-600 shadow-sm'
+                  : 'text-slate-500 hover:bg-slate-200/50 hover:text-slate-800'
+              }`}
+            >
+              {tab.label}
               <span
                 className={`rounded-full px-2 py-0.5 text-[10px] transition-colors ${
-                  filter === tab.id ? tab.color : 'bg-slate-200/50 text-slate-400'
+                  isActive ? 'text-orange-600' : 'bg-slate-200/50 text-slate-400'
                 }`}
               >
-                {tab.count}
+                {counts[tab.id]}
               </span>
-            ) : null}
-          </button>
-        ))}
+            </button>
+          );
+        })}
       </div>
 
-      <Card className="overflow-hidden border border-slate-200 p-0 shadow-sm">
-        {filteredRevisions.length === 0 ? (
-          <EmptyRevisions filter={filter} onAdd={() => openModal()} />
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {filteredRevisions.map((revision) => {
-              const isDone = revision.status === 'done';
-              const isLate = filter === 'atrasadas' && !isDone;
-              const isCompleting = completingIds.includes(revision.id);
+      {status === 'loading' ? (
+        <Card className="flex items-center gap-3">
+          <Loader2 size={18} className="animate-spin text-blue-600" />
+          <p className="text-sm font-semibold text-slate-600">
+            Carregando revisões...
+          </p>
+        </Card>
+      ) : null}
 
-              return (
+      {status === 'error' ? (
+        <Card className="border-red-100 bg-red-50/70">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <AlertCircle size={20} className="mt-0.5 text-red-500" />
+              <div>
+                <h3 className="font-bold text-red-700">Não foi possível carregar as revisões</h3>
+                <p className="mt-1 text-sm text-red-600">{errorMessage}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={loadRevisions}
+              className="rounded-xl bg-white px-4 py-2 text-sm font-bold text-red-600 transition-colors hover:bg-red-100"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        </Card>
+      ) : null}
+
+      {status === 'success' ? (
+        <Card className="overflow-hidden border border-slate-200 p-0 shadow-sm">
+          {filteredRevisions.length === 0 ? (
+            <EmptyRevisions filter={filter} onAdd={() => openModal()} />
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {filteredRevisions.map((revision) => (
                 <div
                   key={revision.id}
-                  className={`group flex flex-col items-start justify-between gap-4 p-4 transition-all duration-500 hover:bg-slate-50/80 sm:flex-row sm:items-center sm:p-5 ${
-                    isDone ? 'bg-slate-50/50' : ''
-                  } ${isCompleting ? 'translate-x-4 scale-95 bg-teal-50/30 opacity-0' : 'translate-x-0 opacity-100'}`}
+                  className="group flex flex-col items-start justify-between gap-4 p-4 transition-all duration-500 hover:bg-slate-50/80 sm:flex-row sm:items-center sm:p-5"
                 >
                   <div className="flex flex-1 items-center gap-4">
                     <button
-                      onClick={() => toggleStatus(revision.id, revision.status)}
+                      type="button"
+                      aria-label={
+                        revision.status === 'done'
+                          ? 'Marcar revisão como pendente'
+                          : 'Marcar revisão como concluída'
+                      }
+                      onClick={() => toggleStatus(revision)}
                       className={`flex-shrink-0 rounded-full p-1 transition-all duration-300 active:scale-75 ${
-                        isDone || isCompleting
-                          ? 'scale-110 text-teal-500 hover:text-teal-600'
+                        revision.status === 'done'
+                          ? 'text-teal-500'
                           : 'text-slate-300 hover:bg-blue-50 hover:text-blue-500'
                       }`}
                     >
-                      {isDone || isCompleting ? (
-                        <CheckCircle2 size={28} className="fill-teal-50 animate-in zoom-in duration-300" />
-                      ) : (
-                        <Circle size={28} />
-                      )}
+                      {revision.status === 'done' ? <CheckCircle2 size={28} /> : <Circle size={28} />}
                     </button>
 
-                    <div className={`transition-all duration-500 ${isDone || isCompleting ? 'line-through opacity-50' : ''}`}>
+                    <div className="transition-all duration-500">
                       <div className="mb-0.5 flex items-center gap-2">
-                        <span
-                          className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
-                            isLate
-                              ? 'bg-red-100 text-red-600'
-                              : isDone || isCompleting
-                                ? 'bg-slate-200 text-slate-500'
-                                : 'bg-slate-100 text-slate-500'
-                          }`}
-                        >
+                        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-slate-500">
                           {revision.subject}
                         </span>
-                        {isLate && !isCompleting ? (
-                          <span className="flex items-center gap-1 text-[10px] font-bold text-red-500 animate-pulse">
-                            <AlertCircle size={12} />
-                            Atrasada
-                          </span>
-                        ) : null}
                       </div>
-                      <h4 className={`text-base font-bold ${isDone || isCompleting ? 'text-slate-500' : 'text-slate-800'}`}>
-                        {revision.topic}
-                      </h4>
+                      <h4 className="text-base font-bold text-slate-800">{revision.topic}</h4>
                     </div>
                   </div>
 
                   <div className="flex w-full items-center gap-3 pl-12 sm:w-auto sm:pl-0">
-                    <span
-                      className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold ${
-                        isLate
-                          ? 'bg-red-50 text-red-600'
-                          : isDone || isCompleting
-                            ? 'bg-slate-100 text-slate-400'
-                            : 'bg-blue-50 text-blue-600'
-                      }`}
-                    >
+                    <span className="flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-600">
                       <Calendar size={14} />
-                      {new Date(revision.date).toLocaleDateString('pt-BR', {
+                      {new Date(`${revision.date}T12:00:00`).toLocaleDateString('pt-BR', {
                         day: '2-digit',
                         month: 'short',
                       })}
                     </span>
 
-                    <div
-                      className={`flex gap-1 transition-all duration-300 ${
-                        isDone || isCompleting
-                          ? 'pointer-events-none opacity-0'
-                          : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100'
-                      }`}
-                    >
+                    <div className="flex gap-1 transition-all duration-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
                       <button
+                        type="button"
+                        aria-label="Editar revisão"
                         onClick={() => openModal(revision)}
                         className="rounded-lg p-2 text-slate-400 transition-all hover:bg-blue-50 hover:text-blue-600 active:scale-90"
                       >
                         <Edit2 size={18} />
                       </button>
                       <button
+                        type="button"
+                        aria-label="Excluir revisão"
                         onClick={() => setItemToDelete(revision.id)}
                         className="rounded-lg p-2 text-slate-400 transition-all hover:bg-red-50 hover:text-red-600 active:scale-90"
                       >
@@ -344,71 +399,52 @@ export default function Revisions() {
                     </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
-
-      {itemToDelete ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="p-6 pt-8 text-center">
-              <div className="relative mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-red-500">
-                <div className="absolute inset-0 rounded-full bg-red-500/20 animate-ping" />
-                <Trash2 size={28} className="relative z-10" />
-              </div>
-              <h3 className="mb-2 text-xl font-bold text-slate-800">Excluir revisão?</h3>
-              <p className="px-2 text-sm text-slate-500">
-                Esta ação não pode ser desfeita. Tem certeza que deseja apagar este tópico da sua lista?
-              </p>
+              ))}
             </div>
-            <div className="flex border-t border-slate-100 bg-slate-50/50">
-              <button
-                onClick={() => setItemToDelete(null)}
-                className="flex-1 px-4 py-4 font-bold text-slate-600 transition-colors hover:bg-slate-100 active:bg-slate-200"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={confirmDelete}
-                className="flex-1 border-l border-slate-100 px-4 py-4 font-bold text-red-600 transition-colors hover:bg-red-50 active:bg-red-100"
-              >
-                Sim, excluir
-              </button>
-            </div>
-          </div>
-        </div>
+          )}
+        </Card>
       ) : null}
 
       {isModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 p-5">
-              <h3 className="text-lg font-bold text-slate-800">
-                {formData.id ? 'Editar revisão' : 'Nova revisão'}
-              </h3>
+        <div className="fixed inset-0 z-[80] flex items-center justify-center px-4 py-6">
+          <button
+            type="button"
+            aria-label="Fechar modal"
+            className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm"
+            onClick={closeModal}
+          />
+          <Card className="relative z-10 w-full max-w-lg border-blue-100 shadow-2xl">
+            <div className="mb-6 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-xl font-bold text-slate-800">
+                  {formData.id ? 'Editar revisão' : 'Nova revisão'}
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Defina o tópico, a disciplina e a próxima data de revisão.
+                </p>
+              </div>
               <button
+                type="button"
                 onClick={closeModal}
-                className="rounded-full p-1 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-600 active:scale-90"
+                className="rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="space-y-5 p-5">
-              <div>
-                <label className="mb-1.5 block text-sm font-bold text-slate-700">Disciplina</label>
+            <form className="space-y-4" onSubmit={handleSave}>
+              <div className="space-y-2">
+                <label htmlFor="revision-subject" className="text-sm font-bold text-slate-700">
+                  Disciplina
+                </label>
                 <select
-                  required
+                  id="revision-subject"
+                  name="subject"
                   value={formData.subject}
-                  onChange={(event) =>
-                    setFormData((currentFormData) => ({
-                      ...currentFormData,
-                      subject: event.target.value,
-                    }))
+                  onChange={({ target: { value } }) =>
+                    setFormData((currentForm) => ({ ...currentForm, subject: value }))
                   }
-                  className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium text-slate-800 transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition-colors focus:border-blue-400"
                 >
                   {SUBJECTS.map((subject) => (
                     <option key={subject} value={subject}>
@@ -418,56 +454,91 @@ export default function Revisions() {
                 </select>
               </div>
 
-              <div>
-                <label className="mb-1.5 block text-sm font-bold text-slate-700">Tópico</label>
+              <div className="space-y-2">
+                <label htmlFor="revision-topic" className="text-sm font-bold text-slate-700">
+                  Tópico
+                </label>
                 <input
-                  type="text"
-                  required
-                  placeholder="Ex: Revolução Industrial"
+                  id="revision-topic"
+                  name="topic"
                   value={formData.topic}
-                  onChange={(event) =>
-                    setFormData((currentFormData) => ({
-                      ...currentFormData,
-                      topic: event.target.value,
-                    }))
+                  onChange={({ target: { value } }) =>
+                    setFormData((currentForm) => ({ ...currentForm, topic: value }))
                   }
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium text-slate-800 transition-all placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition-colors focus:border-blue-400"
+                  placeholder="Geometria Espacial"
                 />
               </div>
 
-              <div>
-                <label className="mb-1.5 block text-sm font-bold text-slate-700">Data programada</label>
+              <div className="space-y-2">
+                <label htmlFor="revision-date" className="text-sm font-bold text-slate-700">
+                  Data
+                </label>
                 <input
+                  id="revision-date"
                   type="date"
-                  required
+                  name="date"
                   value={formData.date}
-                  onChange={(event) =>
-                    setFormData((currentFormData) => ({
-                      ...currentFormData,
-                      date: event.target.value,
-                    }))
+                  onChange={({ target: { value } }) =>
+                    setFormData((currentForm) => ({ ...currentForm, date: value }))
                   }
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium text-slate-800 transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition-colors focus:border-blue-400"
                 />
               </div>
 
-              <div className="flex gap-3 border-t border-slate-100 pt-4">
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row">
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700 disabled:cursor-wait disabled:opacity-70"
+                >
+                  {isSaving ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                  Salvar revisão
+                </button>
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-700 transition-all hover:bg-slate-50 active:scale-95"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
                 >
                   Cancelar
                 </button>
-                <button
-                  type="submit"
-                  className="flex-1 rounded-xl bg-blue-600 px-4 py-3 font-bold text-white shadow-md shadow-blue-500/20 transition-all hover:bg-blue-700 active:scale-95"
-                >
-                  {formData.id ? 'Salvar alterações' : 'Cadastrar'}
-                </button>
               </div>
             </form>
-          </div>
+          </Card>
+        </div>
+      ) : null}
+
+      {itemToDelete ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center px-4 py-6">
+          <button
+            type="button"
+            aria-label="Fechar modal de exclusão"
+            className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm"
+            onClick={() => setItemToDelete(null)}
+          />
+          <Card className="relative z-10 w-full max-w-md border-red-100 shadow-2xl">
+            <h3 className="text-xl font-bold text-slate-800">Excluir revisão?</h3>
+            <p className="mt-2 text-sm text-slate-500">
+              Esta ação remove a revisão da sua fila e não pode ser desfeita.
+            </p>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={confirmDelete}
+                className="rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-red-700"
+              >
+                Confirmar exclusão
+              </button>
+              <button
+                type="button"
+                onClick={() => setItemToDelete(null)}
+                className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+            </div>
+          </Card>
         </div>
       ) : null}
     </div>

@@ -4,13 +4,12 @@ Reference document for system design. Update whenever changing shell structure, 
 
 ---
 
-## Migration State (Sprint Arq — in progress)
+## Migration State (Sprint Arq — runtime closed)
 
-The codebase remains in Sprint Arq because routing and state migration are still
-open, but the runtime drain from `legacy/` to `src/features/` is complete.
-There are no runtime imports from `legacy/` anywhere under `src/`.
-`docs/SPRINTS.md` is the operational source of truth for pending work only. This
-section keeps the architectural migration history plus the current open steps.
+The runtime drain from `legacy/` to `src/features/` is complete and the shell
+state migration to Zustand is also closed. There are no runtime imports from
+`legacy/` anywhere under `src/`. `docs/SPRINTS.md` remains the operational
+source of truth for pending work only; this section keeps the migration history.
 
 | Step | Artefact | Status |
 |------|----------|--------|
@@ -27,32 +26,35 @@ section keeps the architectural migration history plus the current open steps.
 | SA-2.5 | Student modules → `src/features/student/` | ✅ Done |
 | SA-2.6 | Teacher modules → `src/features/teacher/` | ✅ Done |
 | SA-3.1 | `src/services/` layer setup | ✅ Done |
-| SA-3.2 | `src/store/` Zustand wiring | ⬜ |
+| SA-3.2 | `src/store/` Zustand wiring | ✅ Done |
 
 ---
 
 ## Target Directory Tree
 
 ```
+api/                     # Vercel catch-all API surface
 src/
   assets/
   components/           # Shared presentational-only (named exports)
   features/
-    auth/               # Login.jsx ✅
+    auth/               # Login.jsx
     student/            # StudentShell.jsx + student-domain modules
     teacher/            # TeacherShell.jsx + teacher-domain modules
     ai-tools/           # Tutoria.jsx, EssayReview.jsx, DiscursiveAI.jsx
     assessments/        # Simulados.jsx, TriSimulator.jsx, FuvestApproval.jsx
-  layouts/              # Shell auth/session guards + <Outlet> context
+  layouts/              # Shell guards + ?view= sync
   pages/                # Route entry points — thin orchestrators only
   routes/
-    AppRoutes.jsx       # All <Routes> declarations ✅
+    AppRoutes.jsx       # All <Routes> declarations
+  server/
+    api/                # Router + handlers + Supabase server client
   store/                # Zustand slices + composed app store
-  services/             # API wrapper + domain clients
-  lib/                  # demoSession.js, launchExperience.js, pageLoaders.js
+  services/             # API wrapper + auth/student clients
+  lib/                  # useAuth, launchExperience, pageLoaders, Supabase bootstrap
   utils/                # Pure functions, no side-effects
-  App.jsx               # Store bootstrap + routes host ✅
-  main.jsx              # createRoot + BrowserRouter ✅
+  App.jsx               # AppErrorBoundary + StoreBootstrap + routes host
+  main.jsx              # createRoot + BrowserRouter
 ```
 
 The naming map below documents the drained runtime files and their final homes.
@@ -68,7 +70,7 @@ The naming map below documents the drained runtime files and their final homes.
 | Non-component module | `camelCase.js` | `sessionSlice.js` |
 | Route config | `PascalCase.jsx` | `AppRoutes.jsx` |
 | Shared component | `PascalCase.jsx` + named export | `StudentFeatures.jsx` |
-| Hook | `use` + PascalCase | `useSession.js` |
+| Hook | `use` + PascalCase | `useAuth.js` |
 
 ### Migration naming map (legacy/ → src/features/)
 
@@ -101,7 +103,8 @@ The naming map below documents the drained runtime files and their final homes.
 
 ```
 main.jsx  (BrowserRouter)
-  └── App.jsx  (StoreBootstrap + AppRoutes)
+  └── App.jsx  (AppErrorBoundary + StoreBootstrap + AppRoutes)
+        ├── StoreBootstrap → lib/useAuth.js → GET /api/auth/session
         └── routes/AppRoutes.jsx
               ├── /  /login      → pages/LoginPage → features/auth/Login.jsx
               ├── /aluno         → layouts/StudentShellLayout.jsx
@@ -115,11 +118,10 @@ main.jsx  (BrowserRouter)
                                         └── features/teacher/TeacherShell.jsx
 ```
 
-Internal shell navigation does NOT use React Router — uses
-`AppContext.navigate(viewId)` in the student shell and
-`TeacherContext.navigate(viewId)` in the teacher shell. Both update
-`currentView`, which is synced to `?view=` by the shell layout. The layouts
-also coerce invalid view ids to safe fallbacks (`dashboard` or `overview`).
+Internal shell navigation does NOT use React Router. `studentCurrentView` and
+`teacherCurrentView` live in Zustand slices, are synced to `?view=` by the
+shell layouts, and invalid view ids are coerced to safe fallbacks
+(`dashboard` or `overview`).
 
 ---
 
@@ -147,15 +149,15 @@ const StudentShellPage = lazy(() => import('../pages/StudentShellPage.jsx'));
 
 | File | Exports | Description |
 |------|---------|-------------|
-| `Login.jsx` | `default Login` | Full login UI: profile selection, credentials form, loading ritual |
+| `Login.jsx` | `default Login` | Full auth UI: profile selection, login, registration, password recovery, and login loading ritual |
 
-`Login` receives `onLogin({ profile, formData })` from `LoginPage`. Has no routing knowledge.
+`Login` receives callbacks from `LoginPage` (`onLogin`, `onRegister`, `onRecover`) and remains route-agnostic.
 
 ### student/
 
 | File | Exports | Description |
 |------|---------|-------------|
-| `StudentShell.jsx` | `default StudentShell` | Main student shell with `AppContext`, notifications, profile actions, same-slice lazy views, and page-injected cross-slice modules |
+| `StudentShell.jsx` | `default StudentShell` | Main student shell backed by `studentShellSlice`, notifications from `services/student.js`, profile actions, and page-injected cross-slice modules |
 | `CalendarView.jsx` | `default CalendarView` | Timeline of vestibular milestones with exam filters and schedule integration CTA |
 | `ScheduleView.jsx` | `default ScheduleView` | Editable weekly schedule backed by the shared `ModalFrame` |
 | `Readings.jsx` | `default Readings` | Leituras obrigatórias com progresso e anotações |
@@ -169,7 +171,7 @@ const StudentShellPage = lazy(() => import('../pages/StudentShellPage.jsx'));
 
 | File | Exports | Description |
 |------|---------|-------------|
-| `TeacherShell.jsx` | `default TeacherShell` | Shell do professor com `TeacherContext`, navegação e relatórios |
+| `TeacherShell.jsx` | `default TeacherShell` | Shell do professor backed by `teacherShellSlice`, navegação interna e relatórios |
 | `LessonPlanner.jsx` | `default LessonPlanner` | Planejador de aulas com preview e sugestões guiadas |
 
 ### ai-tools/
@@ -195,21 +197,37 @@ const StudentShellPage = lazy(() => import('../pages/StudentShellPage.jsx'));
 | File | Responsibility |
 |------|----------------|
 | `main.jsx` | `createRoot` + `BrowserRouter` |
-| `App.jsx` | Renders `StoreBootstrap` + `<AppRoutes />` |
+| `App.jsx` | Renders `AppErrorBoundary`, `StoreBootstrap`, and `<AppRoutes />` |
 | `routes/AppRoutes.jsx` | Declarative route config |
-| `pages/LoginPage.jsx` | Builds a demo session, short-circuits invalid student login, and navigates to the shell |
+| `pages/LoginPage.jsx` | Wires `useAuth()` into `Login.jsx`, redirects authenticated users, and preloads shell chunks |
 | `layouts/StudentShellLayout.jsx` | Validates student session, syncs `?view=`, and exposes outlet context |
 | `layouts/TeacherShellLayout.jsx` | Validates teacher session, syncs `?view=`, and exposes outlet context |
 | `pages/StudentShellPage.jsx` | Consumes outlet context, lazy-loads cross-slice student views, and injects them into `StudentShell.jsx` |
 | `pages/TeacherShellPage.jsx` | Consumes outlet context and injects props into teacher shell |
-| `lib/demoSession.js` | Session CRUD on configured Web Storage with TTL validation and student demo credential checks |
+| `lib/useAuth.js` | Auth hook + bootstrap for login, logout, session refresh, registration, recovery, and profile update |
 | `lib/launchExperience.js` | Welcome destination per profile |
 | `lib/pageLoaders.js` | Shell chunk preload |
-| `store/index.js` | Composed Zustand store + `StoreBootstrap` |
-| `services/api.js` | Shared fetch wrapper with timeout and normalized errors |
-| `services/student.js` | Student-facing service calls, including notifications |
-| `components/ProfileActionPanels.jsx` | Settings + help modals (both profiles) |
+| `store/index.js` | `StoreBootstrap` + re-export of the composed app store |
+| `store/appStore.js` | Composes `sessionSlice`, `uiSlice`, `studentShellSlice`, and `teacherShellSlice` |
+| `services/api.js` | Shared fetch wrapper with timeout, normalized errors, and TTL cache helpers |
+| `services/auth.js` | Client auth contract for `/api/auth/*` |
+| `services/student.js` | Student-facing service calls for notifications, mock exams, and revisions |
+| `components/AppErrorBoundary.jsx` | Global render/data fallback with retry |
+| `components/ProfileActionPanels.jsx` | Settings, profile edit, and help modals (both profiles) |
 | `components/StudentFeatures.jsx` | `RaioXSection` + `MentoriaView` |
+
+---
+
+## Layer: api/ + src/server/api/
+
+| File | Responsibility |
+|------|----------------|
+| `api/[...path].js` | Catch-all Vercel function that forwards requests into the internal router |
+| `src/server/api/router.js` | Dispatches `/api/auth/*` and `/api/student/*` endpoints |
+| `src/server/api/http.js` | Request/response helpers and normalized API errors |
+| `src/server/api/supabase.js` | Server-side Supabase client with cookie bridging |
+| `src/server/api/authHandlers.js` | Session, login, logout, register, recover, and profile update handlers |
+| `src/server/api/studentHandlers.js` | Notifications, mock exams, and revisions handlers |
 
 ---
 
@@ -227,73 +245,73 @@ tutoria, mentoria, humor, rede-de-apoio
 
 ---
 
-## Auth flow (demo)
+## Auth flow (server-side)
 
 ```
-1. User: selects profile + credentials in features/auth/Login.jsx
-2. LoginPage.handleLogin({ profile, formData })
-3. buildDemoSession()       → session object or null
-4. persistDemoSession()     → runs only when session exists
-5. preloadShellPage()       → preloads shell chunk
-6. navigate()               → /aluno or /professor
-7. StudentShellLayout       → getStoredDemoSession() + sanitized view + outlet context
-8. StudentShellPage         → injects the cross-slice lazy view map
+1. App mount           → StoreBootstrap runs useAuthBootstrap()
+2. Session bootstrap   → GET /api/auth/session
+3. LoginPage           → passes login/register/recover callbacks into Login.jsx
+4. Login/Register      → POST /api/auth/login or POST /api/auth/register
+5. Supabase SSR        → server client issues/refreshes cookies via response headers
+6. Protected layouts   → block /aluno and /professor when session is missing
+7. Shell bootstrap     → initializeStudentShell / initializeTeacherShell from Zustand
+8. Profile edits       → PATCH /api/auth/profile from AccountSettingsModal
 ```
 
-Demo accounts (`demoSession.js` + `.env.local`):
-
-| User | Password | Profile | Restrictions |
-|------|----------|---------|--------------|
-| `VITE_DEMO_STUDENT_USERNAME` | `VITE_DEMO_STUDENT_PASSWORD` | student | `discursiva-ia` hidden |
-| `VITE_DEMO_POWER_USER_USERNAME` | `VITE_DEMO_POWER_USER_PASSWORD` | student | none |
-| any non-empty | any non-empty | teacher | none |
-
-If no student demo accounts are configured, the student shell falls back to
-accepting any non-empty credential pair in demo mode. Teacher demo remains open
-to any non-empty credentials.
+No credential, refresh token, or session cookie lifecycle is handled directly by
+the browser bundle anymore. The client only talks to `/api/*`.
 
 ---
 
-## React Contexts
+## Zustand state model
 
-### AppContext (`features/student/StudentShell.jsx`)
+### sessionSlice
 
 ```ts
-interface AppContextValue {
-  currentView: string;
-  navigate: (id: string) => void;
-  sidebarOpen: boolean;
-  setSidebarOpen: (open: boolean) => void;
-  user: { name: string; turma: string; xp: number; level: number };
-  addXp: (amount: number) => void;
-  hiddenViews: string[];
+interface SessionSlice {
+  authStatus: 'loading' | 'authenticated' | 'unauthenticated';
+  session: { profile: 'aluno' | 'professor'; hiddenStudentViews: string[] } | null;
+  user: { id: string; email: string; fullName: string; profile: string } | null;
 }
 ```
 
-### TeacherContext (`features/teacher/TeacherShell.jsx`)
+### studentShellSlice
 
 ```ts
-interface TeacherContextValue {
-  currentView: string;
-  navigate: (id: string) => void;
-  sidebarOpen: boolean;
-  setSidebarOpen: (open: boolean) => void;
-  teacher: { name: string; subject: string; turmas: string[] };
+interface StudentShellSlice {
+  studentAllowedViews: string[];
+  studentCurrentView: string;
+  studentHiddenViews: string[];
+  studentUser: { name: string; turma: string; xp: number; level: number };
 }
 ```
 
-The contexts remain the shell orchestration surface for `currentView`,
-navigation, and user data. `sidebarOpen` is already sourced from Zustand.
-Full context replacement remains scoped to SA-3.2.
+### teacherShellSlice
+
+```ts
+interface TeacherShellSlice {
+  teacherAllowedViews: string[];
+  teacherCurrentView: string;
+  selectedTeacherStudentId: string | null;
+}
+```
+
+`uiSlice` remains responsible for generic UI flags such as shell sidebar state.
 
 ---
 
 ## Shared components (src/components/)
 
+### AppErrorBoundary.jsx
+
+Named export: default only.
+Wraps the app host and renders a retryable fallback for unexpected render/data failures.
+
 ### ProfileActionPanels.jsx
 
 Named exports: `AccountSettingsModal`, `AccountHelpModal`, `ModalFrame`, `SUPPORT_EMAIL`.
 `ModalFrame`: overlay, Escape key, body scroll lock, `max-h-[90vh]`.
+`AccountSettingsModal`: profile name edit + local preferences.
 
 ### StudentFeatures.jsx
 
@@ -305,24 +323,30 @@ Named exports:
 
 ## Data strategy
 
-The app now mixes mocked modules with an initial real-data integration via
-`src/services/`. Constants still live at the top of the consuming file while a
-module stays local-only.
+The current live contract is centered on `/api/*`. `services/api.js` owns
+timeout handling, error normalization, TTL caching, and cache invalidation after
+mutations.
 
-### Initial API contract
+### Student endpoints in use
 
-The first live contract currently implemented is:
+| Endpoint | Consumer |
+|----------|----------|
+| `GET /api/student/notifications` | `features/student/StudentShell.jsx` |
+| `GET /api/student/mock-exams` | `features/assessments/Simulados.jsx` |
+| `POST/PATCH/DELETE /api/student/mock-exams` | `features/assessments/Simulados.jsx` |
+| `GET /api/student/revisions` | `features/student/Revisions.jsx` |
+| `POST/PATCH/DELETE /api/student/revisions` | `features/student/Revisions.jsx` |
 
-| Endpoint | Response fields | Consumer |
-|----------|-----------------|----------|
-| `GET /student/notifications` | `id`, `title`, `body`, `createdAt`, `read`, `priority` | `features/student/StudentShell.jsx` via `services/student.js` |
+### Auth endpoints in use
 
-| Constant | Location | Target (Sprint SA-3) |
-|----------|----------|-----------------------|
-| `mockDashboard`, `booksData` | `features/student/StudentShell.jsx` | `services/student.js` |
-| `MOCK_MENTORS` | `features/student/Mentorship.jsx` | `services/mentors.js` |
-| `mockStudents` | `features/teacher/TeacherShell.jsx` | `services/teacher.js` |
-| `RAIOX_DATA` | `StudentFeatures.jsx` | `services/raiox.js` |
+| Endpoint | Consumer |
+|----------|----------|
+| `GET /api/auth/session` | `lib/useAuth.js` bootstrap |
+| `POST /api/auth/login` | `pages/LoginPage.jsx` |
+| `POST /api/auth/logout` | shell layouts |
+| `POST /api/auth/register` | `pages/LoginPage.jsx` |
+| `POST /api/auth/recover` | `pages/LoginPage.jsx` |
+| `PATCH /api/auth/profile` | `components/ProfileActionPanels.jsx` |
 
 ---
 

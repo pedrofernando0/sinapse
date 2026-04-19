@@ -1,4 +1,7 @@
 const DEFAULT_TIMEOUT_MS = 5000;
+const DEFAULT_CACHE_TTL_MS = 30 * 1000;
+const DEFAULT_API_BASE_URL = '/api';
+const API_CACHE = new Map();
 
 const normalizeBaseUrl = (value = '') => value.trim().replace(/\/+$/, '');
 
@@ -14,11 +17,33 @@ export class ApiError extends Error {
 }
 
 export function getApiBaseUrl() {
-  return normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL || '');
+  return normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL);
 }
 
 export function isApiConfigured() {
   return Boolean(getApiBaseUrl());
+}
+
+export function clearApiCache(matcher) {
+  if (!matcher) {
+    API_CACHE.clear();
+    return;
+  }
+
+  const entries = [...API_CACHE.keys()];
+
+  entries.forEach((key) => {
+    const matches =
+      matcher instanceof RegExp
+        ? matcher.test(key)
+        : typeof matcher === 'function'
+          ? matcher(key)
+          : key.includes(String(matcher));
+
+    if (matches) {
+      API_CACHE.delete(key);
+    }
+  });
 }
 
 const buildApiUrl = (path) => {
@@ -137,4 +162,31 @@ export async function apiRequest({
       signal.removeEventListener('abort', abortListener);
     }
   }
+}
+
+const buildCacheKey = ({
+  body,
+  method = 'GET',
+  path = '',
+} = {}) => `${method.toUpperCase()}:${path}:${body ? JSON.stringify(body) : ''}`;
+
+export async function cachedApiRequest({
+  cacheKey,
+  ttlMs = DEFAULT_CACHE_TTL_MS,
+  ...requestConfig
+} = {}) {
+  const resolvedCacheKey =
+    cacheKey ?? buildCacheKey(requestConfig);
+  const cachedEntry = API_CACHE.get(resolvedCacheKey);
+
+  if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
+    return cachedEntry.payload;
+  }
+
+  const payload = await apiRequest(requestConfig);
+  API_CACHE.set(resolvedCacheKey, {
+    expiresAt: Date.now() + ttlMs,
+    payload,
+  });
+  return payload;
 }

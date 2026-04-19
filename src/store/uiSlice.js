@@ -1,6 +1,10 @@
-export const createUiSlice = (set) => ({
+export const getInitialUiState = () => ({
   studentSidebarOpen: false,
   teacherSidebarOpen: false,
+});
+
+export const createUiSlice = (set) => ({
+  ...getInitialUiState(),
   setStudentSidebarOpen: (open) =>
     set({
       studentSidebarOpen: Boolean(open),

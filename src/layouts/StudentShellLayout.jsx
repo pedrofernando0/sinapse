@@ -6,29 +6,17 @@ import {
   useSearchParams,
 } from 'react-router-dom';
 import { STUDENT_VIEW_IDS } from '../features/student/StudentShell.jsx';
-import { clearDemoSession, getStoredDemoSession } from '../lib/demoSession.js';
-import { useAppStore } from '../store/index.js';
+import { useAuth } from '../lib/useAuth.js';
 
 export default function StudentShellLayout() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const session = getStoredDemoSession('aluno');
-  const setSession = useAppStore((state) => state.setSession);
-  const clearSession = useAppStore((state) => state.clearSession);
+  const { logout, session, status } = useAuth();
   const requestedView = searchParams.get('view');
   const initialView = requestedView || 'dashboard';
   const safeInitialView = !session || !STUDENT_VIEW_IDS.includes(initialView) || session.hiddenStudentViews?.includes(initialView)
     ? 'dashboard'
     : initialView;
-
-  useEffect(() => {
-    if (session) {
-      setSession(session);
-      return;
-    }
-
-    clearSession();
-  }, [clearSession, session, setSession]);
 
   useEffect(() => {
     if (!session || requestedView === safeInitialView) {
@@ -51,10 +39,10 @@ export default function StudentShellLayout() {
   }, [requestedView, searchParams, setSearchParams]);
 
   const handleLogout = useCallback(() => {
-    clearSession();
-    clearDemoSession();
-    navigate('/login');
-  }, [clearSession, navigate]);
+    logout().finally(() => {
+      navigate('/login');
+    });
+  }, [logout, navigate]);
 
   const outletContext = useMemo(() => ({
     session,
@@ -62,6 +50,10 @@ export default function StudentShellLayout() {
     onViewChange: handleViewChange,
     onLogout: handleLogout,
   }), [handleLogout, handleViewChange, safeInitialView, session]);
+
+  if (status === 'loading') {
+    return <div className="min-h-screen bg-slate-950" />;
+  }
 
   if (!session) {
     return <Navigate to="/login" replace />;

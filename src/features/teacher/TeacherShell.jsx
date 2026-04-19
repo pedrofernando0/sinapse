@@ -1,4 +1,4 @@
-import React, { useState, createContext, useContext, useMemo, useRef, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
   Users, LayoutDashboard, BookOpen, TrendingUp, CheckCircle2, 
   AlertCircle, Clock, Search, ChevronRight, BarChart2, 
@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import LessonPlanner from './LessonPlanner.jsx';
 import { AccountHelpModal, AccountSettingsModal } from '../../components/ProfileActionPanels.jsx';
+import { useAuth } from '../../lib/useAuth.js';
 import { useAppStore } from '../../store/index.js';
 
 // ============================================================================
@@ -128,30 +129,58 @@ export const TEACHER_VIEW_IDS = Object.freeze(Object.keys(TEACHER_VIEW_TITLES));
 const sanitizeTeacherView = (view) => (TEACHER_VIEW_IDS.includes(view) ? view : 'overview');
 
 // ============================================================================
-// 2. CONTEXTO GLOBAL DO PROFESSOR
+// 2. STORE DO PROFESSOR
 // ============================================================================
 
-const TeacherContext = createContext();
-
-const TeacherProvider = ({ children, initialView = 'overview', session = null, onViewChange = null }) => {
-  const [currentView, setCurrentView] = useState(() => sanitizeTeacherView(initialView));
-  const [selectedStudentId, setSelectedStudentId] = useState(mockStudents[0].id);
+const useTeacher = () => {
+  const authUser = useAppStore((state) => state.user);
+  const currentView = useAppStore((state) => state.teacherCurrentView);
+  const navigate = useAppStore((state) => state.navigateTeacherShell);
+  const selectedStudentId = useAppStore((state) => state.selectedTeacherStudentId);
+  const setSelectedStudentId = useAppStore((state) => state.setSelectedTeacherStudentId);
   const sidebarOpen = useAppStore((state) => state.teacherSidebarOpen);
   const setSidebarOpen = useAppStore((state) => state.setTeacherSidebarOpen);
   const teacherProfile = useMemo(
     () => ({
       ...DEFAULT_TEACHER_PROFILE,
-      ...(session?.name ? { name: session.name } : {}),
-      ...(session?.username ? { email: `${session.username}@sinapse.local` } : {}),
+      ...(authUser?.fullName ? { name: authUser.fullName } : {}),
+      ...(authUser?.email ? { email: authUser.email } : {}),
     }),
-    [session?.name, session?.username]
+    [authUser?.email, authUser?.fullName],
+  );
+  const selectedStudent = useMemo(
+    () => mockStudents.find((student) => student.id === selectedStudentId) || mockStudents[0],
+    [selectedStudentId],
   );
 
+  return {
+    classSummary,
+    currentView,
+    mockStudents,
+    navigate,
+    selectedStudent,
+    selectedStudentId,
+    setSelectedStudentId,
+    setSidebarOpen,
+    sidebarOpen,
+    teacherProfile,
+  };
+};
+
+const TeacherShellBootstrap = ({
+  initialView = 'overview',
+  onViewChange = null,
+} = {}) => {
+  const currentView = useAppStore((state) => state.teacherCurrentView);
+  const initializeTeacherShell = useAppStore((state) => state.initializeTeacherShell);
+
   useEffect(() => {
-    if (initialView) {
-      setCurrentView(sanitizeTeacherView(initialView));
-    }
-  }, [initialView]);
+    initializeTeacherShell({
+      allowedViews: TEACHER_VIEW_IDS,
+      initialView: sanitizeTeacherView(initialView),
+      students: mockStudents,
+    });
+  }, [initialView, initializeTeacherShell]);
 
   useEffect(() => {
     if (typeof onViewChange === 'function') {
@@ -159,29 +188,8 @@ const TeacherProvider = ({ children, initialView = 'overview', session = null, o
     }
   }, [currentView, onViewChange]);
 
-  const navigate = (view) => {
-    setCurrentView(sanitizeTeacherView(view));
-    setSidebarOpen(false);
-  };
-
-  const selectedStudent = useMemo(
-    () => mockStudents.find(s => s.id === selectedStudentId) || mockStudents[0],
-    [selectedStudentId]
-  );
-
-  return (
-    <TeacherContext.Provider value={{ 
-      currentView, navigate, 
-      sidebarOpen, setSidebarOpen, 
-      teacherProfile, mockStudents, classSummary,
-      selectedStudentId, setSelectedStudentId, selectedStudent
-    }}>
-      {children}
-    </TeacherContext.Provider>
-  );
+  return null;
 };
-
-const useTeacher = () => useContext(TeacherContext);
 
 // ============================================================================
 // 3. COMPONENTES UI REUTILIZÁVEIS (Glassmorphism)
@@ -746,6 +754,7 @@ const SidebarItem = ({ icon: Icon, label, id }) => {
 
 const Header = ({ onLogout }) => {
   const { currentView, setSidebarOpen, classSummary, teacherProfile } = useTeacher();
+  const { updateProfile, user } = useAuth();
   const [notifications, setNotifications] = useState(INITIAL_TEACHER_NOTIFICATIONS);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -928,8 +937,10 @@ const Header = ({ onLogout }) => {
       <AccountSettingsModal
         open={showSettingsModal}
         onClose={() => setShowSettingsModal(false)}
+        onUpdateProfile={updateProfile}
         profile="teacher"
-        userName={teacherProfile.name.split(' ')[0]}
+        userEmail={user?.email ?? teacherProfile.email}
+        userName={teacherProfile.name}
       />
       <AccountHelpModal
         open={showHelpModal}
@@ -1002,8 +1013,12 @@ const Layout = ({ onLogout }) => {
 
 export default function TeacherShell({ initialView = 'overview', onLogout, session = null, onViewChange = null }) {
   return (
-    <TeacherProvider initialView={initialView} session={session} onViewChange={onViewChange}>
+    <>
+      <TeacherShellBootstrap
+        initialView={initialView}
+        onViewChange={onViewChange}
+      />
       <Layout onLogout={onLogout} />
-    </TeacherProvider>
+    </>
   );
 }

@@ -16,30 +16,32 @@ import {
   Loader2,
   Lock,
   LogIn,
+  Mail,
   Sparkles,
   Target,
   User,
 } from 'lucide-react';
-import { getDemoDisplayName, isDemoLoginAllowed } from '../../lib/demoSession.js';
 
 const INITIAL_FORM_DATA = {
-  username: '',
+  confirmPassword: '',
+  email: '',
+  fullName: '',
   password: '',
   unit: 'Cursinho Popular da Poli-USP',
 };
 
 const STUDENT_FEATURES = [
-  { icon: Activity,     title: 'Raio-X',      desc: 'Análise de prioridades de estudo.' },
-  { icon: Target,       title: 'Diagnóstico',  desc: 'Avaliação inicial de conhecimentos.' },
-  { icon: CalendarDays, title: 'Cronograma',   desc: 'Rotinas e metas pré-definidas.' },
-  { icon: Brain,        title: 'Revisões',     desc: 'Retomada inteligente de conteúdos.' },
+  { icon: Activity, title: 'Raio-X', desc: 'Análise de prioridades de estudo.' },
+  { icon: Target, title: 'Diagnóstico', desc: 'Avaliação inicial de conhecimentos.' },
+  { icon: CalendarDays, title: 'Cronograma', desc: 'Rotinas e metas pré-definidas.' },
+  { icon: Brain, title: 'Revisões', desc: 'Retomada inteligente de conteúdos.' },
 ];
 
 const TEACHER_FEATURES = [
-  { icon: Bot,          title: 'Risco de Evasão', desc: 'Sinais de alerta de alunos.' },
-  { icon: LineChart,    title: 'Analytics',        desc: 'Métricas de desempenho e foco.' },
-  { icon: FileQuestion, title: 'Questões',          desc: 'Base de dados otimizada.' },
-  { icon: LayoutList,   title: 'Gestão',            desc: 'Planejamento unificado de turmas.' },
+  { icon: Bot, title: 'Risco de Evasão', desc: 'Sinais de alerta de alunos.' },
+  { icon: LineChart, title: 'Analytics', desc: 'Métricas de desempenho e foco.' },
+  { icon: FileQuestion, title: 'Questões', desc: 'Base de dados otimizada.' },
+  { icon: LayoutList, title: 'Gestão', desc: 'Planejamento unificado de turmas.' },
 ];
 
 const RITUAL_TEXTS = {
@@ -57,125 +59,277 @@ const RITUAL_TEXTS = {
   ],
 };
 
-export default function Login({ onLogin }) {
+const AUTH_MODE_COPY = {
+  login: {
+    description: 'Entre com seu e-mail institucional ou pessoal para retomar a sessão.',
+    submitLabel: 'Acessar painel',
+    title: 'Entrar na plataforma',
+  },
+  recover: {
+    description: 'Enviamos o link de redefinição para o e-mail associado à sua conta.',
+    submitLabel: 'Enviar recuperação',
+    title: 'Recuperar senha',
+  },
+  register: {
+    description: 'Crie a conta que será usada para acessar cronogramas, revisões e relatórios.',
+    submitLabel: 'Cadastrar agora',
+    title: 'Criar conta',
+  },
+};
+
+const buildDisplayName = ({ email = '', fullName = '' } = {}) => {
+  if (fullName.trim()) {
+    return fullName.trim().split(/\s+/)[0];
+  }
+
+  const [emailName = ''] = email.trim().split('@');
+  return emailName || '';
+};
+
+const buildFieldErrors = (formData, authMode) => {
+  const nextErrors = {};
+  const normalizedEmail = formData.email.trim().toLowerCase();
+
+  if (authMode === 'register' && !formData.fullName.trim()) {
+    nextErrors.fullName = true;
+  }
+
+  if (!normalizedEmail || !normalizedEmail.includes('@')) {
+    nextErrors.email = true;
+  }
+
+  if (authMode !== 'recover' && !formData.password) {
+    nextErrors.password = true;
+  }
+
+  if (authMode === 'register') {
+    if (formData.password.length < 8) {
+      nextErrors.password = true;
+    }
+
+    if (!formData.confirmPassword || formData.confirmPassword !== formData.password) {
+      nextErrors.confirmPassword = true;
+    }
+  }
+
+  return nextErrors;
+};
+
+const buildErrorMessage = (fieldErrors, authMode) => {
+  if (fieldErrors.fullName) {
+    return 'Informe o nome completo para criar a conta.';
+  }
+
+  if (fieldErrors.email) {
+    return authMode === 'recover'
+      ? 'Use um e-mail válido para recuperar a senha.'
+      : 'Use um e-mail válido para continuar.';
+  }
+
+  if (fieldErrors.confirmPassword) {
+    return 'As senhas precisam ser iguais para concluir o cadastro.';
+  }
+
+  if (fieldErrors.password) {
+    return authMode === 'register'
+      ? 'A senha precisa ter pelo menos 8 caracteres.'
+      : 'Informe a senha da sua conta.';
+  }
+
+  return 'Revise os campos destacados antes de continuar.';
+};
+
+export default function Login({
+  onLogin,
+  onRecover,
+  onRegister,
+}) {
   const [step, setStep] = useState(1);
   const [profile, setProfile] = useState(null);
-  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [authMode, setAuthMode] = useState('login');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [loadingTextIdx, setLoadingTextIdx] = useState(0);
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
   const [showPassword, setShowPassword] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState({ username: false, password: false });
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [authError, setAuthError] = useState('');
-  const usernameRef = useRef(null);
-
-  useEffect(() => { setMounted(true); }, []);
+  const [authSuccess, setAuthSuccess] = useState('');
+  const emailRef = useRef(null);
 
   useEffect(() => {
-    if (step !== 3) return;
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (step !== 3) {
+      return undefined;
+    }
+
     setLoadingTextIdx(0);
     const interval = setInterval(() => {
       setLoadingTextIdx((prev) => (prev < 3 ? prev + 1 : prev));
-    }, 1200);
+    }, 900);
     return () => clearInterval(interval);
   }, [step]);
 
-  // Auto-focus username when entering step 2 — desktop only (avoids mobile keyboard pop-up)
   useEffect(() => {
-    if (step !== 2 || isTransitioning) return;
-    if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
-      const t = setTimeout(() => usernameRef.current?.focus(), 650);
-      return () => clearTimeout(t);
+    if (step !== 2) {
+      return undefined;
     }
-  }, [step, isTransitioning]);
 
-  const transition = (fn) => {
-    if (isTransitioning) return;
-    setIsTransitioning(true);
-    setTimeout(() => { fn(); setIsTransitioning(false); }, 500);
+    if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+      const frameId = window.requestAnimationFrame(() => {
+        emailRef.current?.focus();
+      });
+      return () => window.cancelAnimationFrame(frameId);
+    }
+
+    return undefined;
+  }, [authMode, step]);
+
+  const displayName = buildDisplayName(formData);
+  const welcomeTitle = displayName
+    ? `Bem-vindo(a), ${profile === 'professor' ? 'Prof. ' : ''}${displayName}!`
+    : 'Bem-vindo(a) de volta!';
+  const isAluno = profile === 'aluno';
+  const currentCopy = AUTH_MODE_COPY[authMode];
+  const isRecoverMode = authMode === 'recover';
+  const isRegisterMode = authMode === 'register';
+
+  const resetTransientState = () => {
+    setAuthError('');
+    setAuthSuccess('');
+    setFieldErrors({});
+    setShowPassword(false);
+    setShowConfirmPassword(false);
   };
 
-  const handleProfileSelect = (selectedProfile) =>
-    transition(() => { setProfile(selectedProfile); setStep(2); });
+  const handleProfileSelect = (selectedProfile) => {
+    resetTransientState();
+    setProfile(selectedProfile);
+    setAuthMode('login');
+    setFormData(INITIAL_FORM_DATA);
+    setStep(2);
+  };
 
-  const handleBack = () =>
-    transition(() => {
-      setStep(1);
-      setProfile(null);
-      setFormData((prev) => ({ ...prev, password: '' }));
-      setShowPassword(false);
-      setFieldErrors({ username: false, password: false });
-      setAuthError('');
-    });
+  const handleBack = () => {
+    resetTransientState();
+    setStep(1);
+    setProfile(null);
+    setAuthMode('login');
+    setFormData(INITIAL_FORM_DATA);
+  };
+
+  const handleModeChange = (nextMode) => {
+    resetTransientState();
+    setAuthMode(nextMode);
+    setStep(2);
+    setFormData((previousFormData) => ({
+      ...previousFormData,
+      confirmPassword: '',
+      fullName: nextMode === 'register' ? previousFormData.fullName : '',
+      password: '',
+    }));
+  };
 
   const handleChange = ({ target: { name, value } }) => {
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    setFieldErrors((prev) => (prev[name] ? { ...prev, [name]: false } : prev));
+    setFormData((previousFormData) => ({
+      ...previousFormData,
+      [name]: value,
+    }));
+
+    if (fieldErrors[name]) {
+      setFieldErrors((previousErrors) => ({
+        ...previousErrors,
+        [name]: false,
+      }));
+    }
+
     if (authError) {
       setAuthError('');
     }
+
+    if (authSuccess) {
+      setAuthSuccess('');
+    }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (isSubmitting) return;
+  const handleSubmit = async (event) => {
+    event.preventDefault();
 
-    const errors = {
-      username: !formData.username.trim(),
-      password: !formData.password.trim(),
-    };
-    if (errors.username || errors.password) {
-      setFieldErrors(errors);
-      setTimeout(() => setFieldErrors({ username: false, password: false }), 820);
+    if (isSubmitting) {
       return;
     }
 
-    if (!isDemoLoginAllowed({ profile, formData })) {
-      setFieldErrors({ username: true, password: true });
-      setAuthError('Usuário ou senha inválidos para o ambiente do estudante.');
-      setTimeout(() => setFieldErrors({ username: false, password: false }), 820);
+    const nextFieldErrors = buildFieldErrors(formData, authMode);
+
+    if (Object.keys(nextFieldErrors).length > 0) {
+      setFieldErrors(nextFieldErrors);
+      setAuthError(buildErrorMessage(nextFieldErrors, authMode));
       return;
     }
 
     setIsSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    setAuthError('');
+    setAuthSuccess('');
 
-    setIsTransitioning(true);
-    setTimeout(() => {
-      setStep(3);
-      setIsTransitioning(false);
+    try {
+      if (authMode === 'login') {
+        setStep(3);
+        await onLogin?.({ formData, profile });
+        return;
+      }
 
-      setTimeout(() => {
-        setIsTransitioning(true);
-        setTimeout(() => {
-          setStep(1);
-          setProfile(null);
-          setFormData(INITIAL_FORM_DATA);
-          setIsSubmitting(false);
-          setShowPassword(false);
-          setAuthError('');
-          setIsTransitioning(false);
-          onLogin?.({ profile, formData });
-        }, 700);
-      }, 4800);
-    }, 500);
+      if (authMode === 'register') {
+        const response = await onRegister?.({
+          email: formData.email.trim().toLowerCase(),
+          fullName: formData.fullName.trim(),
+          password: formData.password,
+          profile,
+        });
+
+        setAuthMode('login');
+        setFormData((previousFormData) => ({
+          ...previousFormData,
+          confirmPassword: '',
+          fullName: '',
+          password: '',
+        }));
+        setAuthSuccess(
+          response?.requiresEmailConfirmation
+            ? 'Conta criada. Verifique seu e-mail para confirmar o cadastro.'
+            : 'Conta criada. Você já pode entrar com suas credenciais.',
+        );
+        return;
+      }
+
+      await onRecover?.(formData.email.trim().toLowerCase());
+      setAuthMode('login');
+      setFormData((previousFormData) => ({
+        ...previousFormData,
+        password: '',
+      }));
+      setAuthSuccess(
+        'Se existir uma conta para esse e-mail, você receberá o link de recuperação.',
+      );
+    } catch (error) {
+      setStep(2);
+      setAuthError(error.message || 'Não foi possível concluir a solicitação.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const displayName = getDemoDisplayName(formData) || '';
-  const welcomeTitle = displayName
-    ? `Bem-vindo(a), ${profile === 'professor' ? 'Prof. ' : ''}${displayName}!`
-    : 'Bem-vindo(a) de volta!';
-
-  const isAluno = profile === 'aluno';
-
   return (
-    <div className="h-[100dvh] w-full bg-[#050505] flex items-center justify-center p-4 sm:p-6 lg:p-8 font-sans overflow-hidden relative selection:bg-cyan-500/30 selection:text-cyan-200">
-
+    <div className="relative flex h-[100dvh] w-full items-center justify-center overflow-hidden bg-[#050505] p-4 font-sans selection:bg-cyan-500/30 selection:text-cyan-200 sm:p-6 lg:p-8">
       <style>{`
         .bg-noise {
           background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-          opacity: 0.04; mix-blend-mode: overlay; pointer-events: none;
+          opacity: 0.04;
+          mix-blend-mode: overlay;
+          pointer-events: none;
         }
         @keyframes blob {
           0%   { transform: translate(0px, 0px) scale(1); }
@@ -186,277 +340,330 @@ export default function Login({ onLogin }) {
         .animate-blob { animation: blob 12s infinite alternate ease-in-out; }
         .animation-delay-2000 { animation-delay: 2s; }
         .animation-delay-4000 { animation-delay: 4s; }
-        @keyframes loadingProgress { 0% { width: 0%; } 100% { width: 100%; } }
-        .animate-progress { animation: loadingProgress 4.8s linear forwards; }
         ::-webkit-scrollbar { width: 0px; background: transparent; }
       `}</style>
 
-      <div className="absolute inset-0 z-0 bg-noise" />
-      <div className="absolute top-1/4 left-1/4 w-[50vw] h-[50vw] bg-cyan-600/20 rounded-full blur-[120px] pointer-events-none mix-blend-screen animate-blob" />
-      <div className="absolute top-1/3 right-1/4 w-[45vw] h-[45vw] bg-blue-700/20 rounded-full blur-[120px] pointer-events-none mix-blend-screen animate-blob animation-delay-2000" />
-      <div className="absolute bottom-1/4 left-1/3 w-[55vw] h-[55vw] bg-indigo-600/15 rounded-full blur-[120px] pointer-events-none mix-blend-screen animate-blob animation-delay-4000" />
+      <div className="bg-noise absolute inset-0 z-0" />
+      <div className="absolute left-1/4 top-1/4 h-[50vw] w-[50vw] animate-blob rounded-full bg-cyan-600/20 blur-[120px] mix-blend-screen pointer-events-none" />
+      <div className="animation-delay-2000 absolute right-1/4 top-1/3 h-[45vw] w-[45vw] animate-blob rounded-full bg-blue-700/20 blur-[120px] mix-blend-screen pointer-events-none" />
+      <div className="animation-delay-4000 absolute bottom-1/4 left-1/3 h-[55vw] w-[55vw] animate-blob rounded-full bg-indigo-600/15 blur-[120px] mix-blend-screen pointer-events-none" />
 
-      {/* Container glassmorphism */}
-      <div className={`relative z-10 flex h-full max-h-[870px] w-full max-w-[1200px] flex-col overflow-hidden rounded-[2.5rem] border border-white/[0.08] bg-white/[0.02] shadow-[0_20px_80px_-20px_rgba(0,0,0,0.7)] backdrop-blur-3xl lg:flex-row transition-all duration-1000 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'}`}>
-
-        {/* ── Lado esquerdo — Branding ── */}
+      <div className={`relative z-10 flex h-full max-h-[870px] w-full max-w-[1200px] flex-col overflow-hidden rounded-[2.5rem] border border-white/[0.08] bg-white/[0.02] shadow-[0_20px_80px_-20px_rgba(0,0,0,0.7)] backdrop-blur-3xl transition-all duration-1000 lg:flex-row ${mounted ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
         <div className="relative hidden w-5/12 flex-col justify-between overflow-hidden border-r border-white/[0.08] bg-gradient-to-b from-white/[0.03] to-transparent p-10 lg:flex">
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-cyan-500/10 via-transparent to-blue-600/10 opacity-50" />
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:32px_32px]" />
+          <div className="absolute left-0 top-0 h-full w-full bg-gradient-to-br from-cyan-500/10 via-transparent to-blue-600/10 opacity-50" />
 
           <div className="relative z-10">
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.1] bg-white/[0.05] shadow-inner backdrop-blur-md">
                 <BrainCircuit className="text-cyan-400" size={24} />
               </div>
-              <h1 className="text-2xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-white/70">
+              <h1 className="bg-gradient-to-r from-white to-white/70 bg-clip-text text-2xl font-bold tracking-tight text-transparent">
                 Sinapse
               </h1>
             </div>
           </div>
 
-          <div className="relative z-10 flex-1 flex flex-col justify-center mt-12">
-            <BrandingPanel active={step === 1 && !isTransitioning} direction="left">
-              <h2 className="text-[2.75rem] font-semibold text-white leading-[1.1] tracking-tight mb-6">
+          <div className="relative z-10 mt-12 flex flex-1 flex-col justify-center">
+            <BrandingPanel active={step === 1} direction="left">
+              <h2 className="mb-6 text-[2.75rem] font-semibold leading-[1.1] tracking-tight text-white">
                 Inteligência <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
+                <span className="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
                   educacional
                 </span>
               </h2>
-              <p className="text-lg leading-relaxed text-white/50 max-w-sm">
+              <p className="max-w-sm text-lg leading-relaxed text-white/50">
                 Uma experiência fluida e analítica. Ligue os pontos da sua jornada acadêmica com precisão e tecnologia de ponta.
               </p>
             </BrandingPanel>
 
-            <BrandingPanel active={(step === 2 || step === 3) && isAluno && !isTransitioning} direction="right">
+            <BrandingPanel active={step !== 1 && isAluno} direction="right">
               <div className="mb-8">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-xs font-medium mb-4">
+                <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-300">
                   <GraduationCap size={14} /> Espaço do Estudante
                 </div>
-                <h2 className="text-3xl font-bold text-white tracking-tight">O seu ecossistema.</h2>
+                <h2 className="text-3xl font-bold tracking-tight text-white">O seu ecossistema.</h2>
               </div>
-              <FeatureList features={STUDENT_FEATURES} iconColor="text-cyan-400" dimmed={step === 3} hoverBorder="group-hover:border-cyan-500/30" />
+              <FeatureList
+                dimmed={step === 3}
+                features={STUDENT_FEATURES}
+                hoverBorder="group-hover:border-cyan-500/30"
+                iconColor="text-cyan-400"
+              />
             </BrandingPanel>
 
-            <BrandingPanel active={(step === 2 || step === 3) && !isAluno && profile !== null && !isTransitioning} direction="right">
+            <BrandingPanel active={step !== 1 && !isAluno && profile !== null} direction="right">
               <div className="mb-8">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs font-medium mb-4">
+                <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-300">
                   <Sparkles size={14} /> Portal do Docente
                 </div>
-                <h2 className="text-3xl font-bold text-white tracking-tight">Poder analítico.</h2>
+                <h2 className="text-3xl font-bold tracking-tight text-white">Poder analítico.</h2>
               </div>
-              <FeatureList features={TEACHER_FEATURES} iconColor="text-blue-400" dimmed={step === 3} hoverBorder="group-hover:border-blue-500/30" />
+              <FeatureList
+                dimmed={step === 3}
+                features={TEACHER_FEATURES}
+                hoverBorder="group-hover:border-blue-500/30"
+                iconColor="text-blue-400"
+              />
             </BrandingPanel>
           </div>
 
           <div className="relative z-10 mt-12">
-            <div className={`transition-all duration-700 flex items-center gap-3 ${step === 1 ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            <div className={`flex items-center gap-3 transition-all duration-700 ${step === 1 ? 'opacity-100' : 'pointer-events-none opacity-0'}`}>
               <Building2 size={20} className="text-white/30" />
               <div>
-                <p className="text-[10px] text-white/40 uppercase tracking-widest font-semibold mb-0.5">Tecnologia por</p>
-                <p className="text-sm text-white/70 font-medium">Cursinho Popular da Poli-USP</p>
+                <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-widest text-white/40">Tecnologia por</p>
+                <p className="text-sm font-medium text-white/70">Cursinho Popular da Poli-USP</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* ── Lado direito — Interações ── */}
         <div className="relative flex w-full flex-col justify-center p-6 sm:p-10 lg:w-7/12 xl:p-16">
-
-          {/* Logo mobile */}
           <div className="mb-8 flex flex-col items-center justify-center gap-4 lg:hidden">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.1] bg-white/[0.05] shadow-inner backdrop-blur-md">
               <BrainCircuit className="text-cyan-400" size={28} />
             </div>
-            <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-white/70">
+            <h1 className="bg-gradient-to-r from-white to-white/70 bg-clip-text text-2xl font-bold text-transparent">
               Sinapse Educação
             </h1>
           </div>
 
-          {/* Step container — altura fixa para animações de overlay */}
-          <div className="relative mx-auto w-full max-w-[400px] h-[600px]">
-
-            {/* ── Step 1 — Seleção de perfil ── */}
-            <StepPanel active={step === 1 && !isTransitioning} enter="scale-100" exit="scale-95">
+          <div className="relative mx-auto h-[640px] w-full max-w-[420px]">
+            <StepPanel active={step === 1} enter="scale-100" exit="scale-95">
               <div className="mb-10 text-center lg:text-left">
-                <h2 className="text-3xl font-bold text-white mb-3 tracking-tight">Acessar conta</h2>
-                <p className="text-white/50 text-sm">Selecione o seu perfil para prosseguir para o painel.</p>
+                <h2 className="mb-3 text-3xl font-bold tracking-tight text-white">Acessar conta</h2>
+                <p className="text-sm text-white/50">Selecione o seu perfil para prosseguir para o painel.</p>
               </div>
               <div className="flex flex-col gap-4">
                 <ProfileButton
-                  onClick={() => handleProfileSelect('aluno')}
-                  icon={GraduationCap}
-                  label="Sou Estudante"
                   desc="Acessar trilhas, revisões e métricas."
                   hoverColor="cyan"
+                  icon={GraduationCap}
+                  label="Sou Estudante"
+                  onClick={() => handleProfileSelect('aluno')}
                 />
                 <ProfileButton
-                  onClick={() => handleProfileSelect('professor')}
-                  icon={Sparkles}
-                  label="Sou Professor"
                   desc="Gestão de turmas e alertas preditivos."
                   hoverColor="blue"
+                  icon={Sparkles}
+                  label="Sou Professor"
+                  onClick={() => handleProfileSelect('professor')}
                 />
               </div>
             </StepPanel>
 
-            {/* ── Step 2 — Formulário ── */}
-            <StepPanel active={step === 2 && !isTransitioning} enter="translate-y-0" exit="translate-y-8" startAlign>
-              {/* Voltar */}
+            <StepPanel active={step === 2} enter="translate-y-0" exit="translate-y-8" startAlign>
               <button
-                onClick={handleBack}
-                disabled={isSubmitting}
                 className="group mb-6 flex w-fit items-center text-[13px] font-medium text-white/40 transition-colors hover:text-white/90 disabled:opacity-50"
+                disabled={isSubmitting}
+                onClick={handleBack}
+                type="button"
               >
-                <div className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 mr-2.5 transition-all group-hover:bg-white/10">
-                  <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
+                <div className="mr-2.5 flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 transition-all group-hover:bg-white/10">
+                  <ArrowLeft size={14} className="transition-transform group-hover:-translate-x-0.5" />
                 </div>
-                Alterar Perfil
+                Alterar perfil
               </button>
 
-              {/* Cabeçalho */}
               <div className="mb-5">
-                <h2 className="text-[1.65rem] font-bold leading-tight text-white mb-1.5 tracking-tight">
-                  {welcomeTitle}
+                <h2 className="mb-1.5 text-[1.65rem] font-bold leading-tight tracking-tight text-white">
+                  {authMode === 'login' ? welcomeTitle : currentCopy.title}
                 </h2>
-                <p className="text-sm text-white/50">Insira suas credenciais para acessar.</p>
-                <div className="mt-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.08]">
+                <p className="text-sm text-white/50">{currentCopy.description}</p>
+                <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1">
                   <Building2 size={11} className="text-white/30" />
                   <span className="text-[10px] font-medium text-white/35">Cursinho Popular da Poli-USP</span>
                 </div>
               </div>
 
-              {/* SSO — acesso social */}
-              <div className="flex flex-col gap-2.5 mb-5">
-                <SsoButton icon={<GoogleIcon />} label="Continuar com Google" />
-                <SsoButton icon={<AppleIcon />} label="Continuar com Apple" />
-              </div>
+              <form className="w-full space-y-4" onSubmit={handleSubmit}>
+                {isRegisterMode ? (
+                  <CredentialField
+                    autoComplete="name"
+                    disabled={isSubmitting}
+                    hasError={fieldErrors.fullName}
+                    icon={User}
+                    isAluno={isAluno}
+                    label="Nome completo"
+                    name="fullName"
+                    onChange={handleChange}
+                    placeholder="Como seu nome deve aparecer"
+                    type="text"
+                    value={formData.fullName}
+                  />
+                ) : null}
 
-              {/* Divisor */}
-              <div className="flex items-center gap-3 mb-5">
-                <div className="flex-1 h-px bg-white/[0.08]" />
-                <span className="text-[11px] font-medium text-white/30 uppercase tracking-widest">ou</span>
-                <div className="flex-1 h-px bg-white/[0.08]" />
-              </div>
-
-              {/* Formulário */}
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Usuário */}
                 <CredentialField
-                  label="Usuário"
-                  type="text"
-                  name="username"
-                  value={formData.username}
-                  onChange={handleChange}
+                  autoComplete="email"
                   disabled={isSubmitting}
-                  placeholder="ex: joao.silva"
-                  icon={User}
+                  hasError={fieldErrors.email}
+                  icon={Mail}
+                  inputRef={emailRef}
                   isAluno={isAluno}
-                  inputRef={usernameRef}
-                  autoComplete="username"
-                  hasError={fieldErrors.username}
+                  label="E-mail"
+                  name="email"
+                  onChange={handleChange}
+                  placeholder="voce@exemplo.com"
+                  type="email"
+                  value={formData.email}
                 />
 
-                {/* Senha */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between pl-1">
-                    <label className="text-[13px] font-medium text-white/60">Senha</label>
-                    <a
-                      href="#"
-                      className={`text-xs font-medium hover:underline ${isAluno ? 'text-cyan-400/80 hover:text-cyan-300' : 'text-blue-400/80 hover:text-blue-300'}`}
-                    >
-                      Esqueceu a senha?
-                    </a>
-                  </div>
+                {!isRecoverMode ? (
                   <CredentialField
-                    type="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
+                    autoComplete={isRegisterMode ? 'new-password' : 'current-password'}
                     disabled={isSubmitting}
-                    placeholder="••••••••"
+                    hasError={fieldErrors.password}
                     icon={Lock}
                     isAluno={isAluno}
-                    noLabel
+                    label="Senha"
+                    name="password"
+                    onChange={handleChange}
+                    onToggle={() => setShowPassword((currentValue) => !currentValue)}
+                    placeholder="••••••••"
                     showToggle
                     showValue={showPassword}
-                    onToggle={() => setShowPassword((v) => !v)}
-                    autoComplete="current-password"
-                    hasError={fieldErrors.password}
+                    type="password"
+                    value={formData.password}
                   />
-                </div>
+                ) : null}
 
-                {authError && (
-                  <p className="px-1 text-sm font-medium text-red-300">
-                    {authError}
-                  </p>
-                )}
+                {isRegisterMode ? (
+                  <CredentialField
+                    autoComplete="new-password"
+                    disabled={isSubmitting}
+                    hasError={fieldErrors.confirmPassword}
+                    icon={Lock}
+                    isAluno={isAluno}
+                    label="Confirmar senha"
+                    name="confirmPassword"
+                    onChange={handleChange}
+                    onToggle={() => setShowConfirmPassword((currentValue) => !currentValue)}
+                    placeholder="Repita a senha"
+                    showToggle
+                    showValue={showConfirmPassword}
+                    type="password"
+                    value={formData.confirmPassword}
+                  />
+                ) : null}
 
-                {/* Submit */}
+                {authError ? (
+                  <p className="px-1 text-sm font-medium text-red-300">{authError}</p>
+                ) : null}
+
+                {authSuccess ? (
+                  <p className="px-1 text-sm font-medium text-emerald-300">{authSuccess}</p>
+                ) : null}
+
                 <div className="pt-2">
                   <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className={`relative flex w-full items-center justify-center overflow-hidden rounded-2xl px-4 py-4 text-sm font-semibold text-white transition-all duration-300 outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#050505] disabled:opacity-70 disabled:cursor-wait active:scale-[0.98] ${
+                    className={`relative flex w-full items-center justify-center overflow-hidden rounded-2xl px-4 py-4 text-sm font-semibold text-white transition-all duration-300 outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#050505] disabled:cursor-wait disabled:opacity-70 active:scale-[0.98] ${
                       isAluno
-                        ? 'bg-cyan-500 hover:bg-cyan-400 focus:ring-cyan-500 shadow-[0_0_40px_-10px_rgba(6,182,212,0.5)]'
-                        : 'bg-blue-600 hover:bg-blue-500 focus:ring-blue-500 shadow-[0_0_40px_-10px_rgba(37,99,235,0.5)]'
+                        ? 'bg-cyan-500 shadow-[0_0_40px_-10px_rgba(6,182,212,0.5)] hover:bg-cyan-400 focus:ring-cyan-500'
+                        : 'bg-blue-600 shadow-[0_0_40px_-10px_rgba(37,99,235,0.5)] hover:bg-blue-500 focus:ring-blue-500'
                     }`}
+                    disabled={isSubmitting}
+                    type="submit"
                   >
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
                     {isSubmitting ? (
                       <Loader2 size={20} className="animate-spin" />
                     ) : (
                       <span className="relative z-10 flex items-center gap-2">
-                        Acessar Painel <LogIn size={18} className="ml-1 opacity-80" />
+                        {currentCopy.submitLabel}
+                        {authMode === 'login' ? <LogIn size={18} className="ml-1 opacity-80" /> : null}
                       </span>
                     )}
                   </button>
                 </div>
               </form>
+
+              <div className="mt-6 space-y-3">
+                {authMode === 'login' ? (
+                  <>
+                    <button
+                      className={`text-sm font-medium transition-colors ${isAluno ? 'text-cyan-300 hover:text-cyan-200' : 'text-blue-300 hover:text-blue-200'}`}
+                      onClick={() => handleModeChange('recover')}
+                      type="button"
+                    >
+                      Esqueci a senha
+                    </button>
+                    <div className="text-sm text-white/50">
+                      Ainda não tem conta?{' '}
+                      <button
+                        className={`font-semibold transition-colors ${isAluno ? 'text-cyan-300 hover:text-cyan-200' : 'text-blue-300 hover:text-blue-200'}`}
+                        onClick={() => handleModeChange('register')}
+                        type="button"
+                      >
+                        Criar conta
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+
+                {authMode === 'register' ? (
+                  <div className="text-sm text-white/50">
+                    Já tem acesso?{' '}
+                    <button
+                      className={`font-semibold transition-colors ${isAluno ? 'text-cyan-300 hover:text-cyan-200' : 'text-blue-300 hover:text-blue-200'}`}
+                      onClick={() => handleModeChange('login')}
+                      type="button"
+                    >
+                      Já tenho conta
+                    </button>
+                  </div>
+                ) : null}
+
+                {authMode === 'recover' ? (
+                  <button
+                    className={`text-sm font-semibold transition-colors ${isAluno ? 'text-cyan-300 hover:text-cyan-200' : 'text-blue-300 hover:text-blue-200'}`}
+                    onClick={() => handleModeChange('login')}
+                    type="button"
+                  >
+                    Voltar para login
+                  </button>
+                ) : null}
+              </div>
             </StepPanel>
 
-            {/* ── Step 3 — Ritual de carregamento ── */}
-            <StepPanel active={step === 3 && !isTransitioning} enter="scale-100" exit="scale-105" center>
-              {/* [LLM-NOTE: WIDGET DE CARREGAMENTO (FORMA)]
-                  IA futura: este elemento (circular com anéis pulsantes) não deve ser circular
-                  na integração real. Remova 'rounded-full' / 'rounded-3xl' conforme o novo design. */}
+            <StepPanel active={step === 3} center enter="scale-100" exit="scale-105">
               <div className="relative mb-8 flex items-center justify-center">
-                <div className={`absolute inset-0 rounded-full animate-ping opacity-30 ${isAluno ? 'bg-cyan-500' : 'bg-blue-500'}`} />
-                <div className={`absolute -inset-4 rounded-full border border-dashed opacity-20 animate-[spin_4s_linear_infinite] ${isAluno ? 'border-cyan-400' : 'border-blue-400'}`} />
-                <div className={`relative z-10 flex h-24 w-24 items-center justify-center rounded-3xl border backdrop-blur-md shadow-2xl ${isAluno ? 'bg-cyan-500/10 border-cyan-500/30' : 'bg-blue-500/10 border-blue-500/30'}`}>
-                  {isAluno
-                    ? <GraduationCap size={42} className="text-cyan-400 animate-pulse" />
-                    : <Sparkles      size={42} className="text-blue-400 animate-pulse" />
-                  }
+                <div className={`absolute inset-0 animate-ping rounded-full opacity-30 ${isAluno ? 'bg-cyan-500' : 'bg-blue-500'}`} />
+                <div className={`absolute -inset-4 animate-[spin_4s_linear_infinite] rounded-full border border-dashed opacity-20 ${isAluno ? 'border-cyan-400' : 'border-blue-400'}`} />
+                <div className={`relative z-10 flex h-24 w-24 items-center justify-center rounded-3xl border shadow-2xl backdrop-blur-md ${isAluno ? 'border-cyan-500/30 bg-cyan-500/10' : 'border-blue-500/30 bg-blue-500/10'}`}>
+                  {isAluno ? (
+                    <GraduationCap size={42} className="animate-pulse text-cyan-400" />
+                  ) : (
+                    <Sparkles size={42} className="animate-pulse text-blue-400" />
+                  )}
                 </div>
               </div>
 
-              <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">
+              <h2 className="mb-2 text-2xl font-bold tracking-tight text-white">
                 Preparando ambiente, <br />
-                <span className={`text-transparent bg-clip-text bg-gradient-to-r ${isAluno ? 'from-cyan-400 to-blue-400' : 'from-blue-400 to-indigo-400'}`}>
+                <span className={`bg-gradient-to-r bg-clip-text text-transparent ${isAluno ? 'from-cyan-400 to-blue-400' : 'from-blue-400 to-indigo-400'}`}>
                   {displayName || 'Usuário'}
                 </span>
               </h2>
 
-              <div className="h-6 mt-2 mb-8 relative w-full overflow-hidden">
+              <div className="relative mb-8 mt-2 h-6 w-full overflow-hidden">
                 {RITUAL_TEXTS[profile || 'aluno'].map((text, idx) => (
                   <p
                     key={idx}
-                    className={`absolute w-full text-sm text-white/50 transition-all duration-500 ${loadingTextIdx === idx ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+                    className={`absolute w-full text-sm text-white/50 transition-all duration-500 ${loadingTextIdx === idx ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}
                   >
                     {text}
                   </p>
                 ))}
               </div>
 
-              <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden">
-                <div className={`h-full animate-progress rounded-full ${isAluno ? 'bg-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.6)]' : 'bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.6)]'}`} />
+              <div className="h-1 w-48 overflow-hidden rounded-full bg-white/10">
+                <div className={`h-full w-full animate-pulse rounded-full ${isAluno ? 'bg-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.6)]' : 'bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.6)]'}`} />
               </div>
             </StepPanel>
           </div>
 
-          <div className={`mt-auto pt-6 text-center text-[10px] font-medium uppercase tracking-widest text-white/30 transition-all duration-700 lg:hidden ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
+          <div className="mt-auto pt-6 text-center text-[10px] font-medium uppercase tracking-widest text-white/30 lg:hidden">
             Tecnologia por Cursinho Popular Poli-USP
           </div>
         </div>
@@ -465,18 +672,17 @@ export default function Login({ onLogin }) {
   );
 }
 
-/* ─────────────── Subcomponentes presentacionais ─────────────── */
-
 const PANEL_TRANSITION_STYLE = {
   transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)',
 };
 
 function BrandingPanel({ active, direction, children }) {
-  const dirClass = direction === 'left' ? '-translate-x-12' : 'translate-x-12';
+  const directionClass = direction === 'left' ? '-translate-x-12' : 'translate-x-12';
+
   return (
     <div
       className={`absolute inset-0 flex flex-col justify-center transition-all duration-700 ${
-        active ? 'opacity-100 translate-x-0 pointer-events-auto' : `opacity-0 ${dirClass} pointer-events-none`
+        active ? 'translate-x-0 opacity-100 pointer-events-auto' : `${directionClass} opacity-0 pointer-events-none`
       }`}
       style={PANEL_TRANSITION_STYLE}
     >
@@ -485,15 +691,15 @@ function BrandingPanel({ active, direction, children }) {
   );
 }
 
-function FeatureList({ features, iconColor, dimmed, hoverBorder }) {
+function FeatureList({ dimmed, features, hoverBorder, iconColor }) {
   return (
     <div className="grid grid-cols-1 gap-4 pr-6">
-      {features.map(({ icon: Icon, title, desc }, idx) => (
+      {features.map(({ icon: Icon, title, desc }) => (
         <div
-          key={idx}
-          className={`group flex items-start gap-4 p-4 rounded-2xl border border-white/[0.05] bg-white/[0.02] transition-colors ${dimmed ? 'opacity-50' : 'hover:bg-white/[0.04]'}`}
+          key={title}
+          className={`group flex items-start gap-4 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4 transition-colors ${dimmed ? 'opacity-50' : 'hover:bg-white/[0.04]'}`}
         >
-          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] border border-white/[0.05] ${hoverBorder} transition-colors`}>
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.05] bg-white/[0.05] transition-colors ${hoverBorder}`}>
             <Icon size={18} className={iconColor} />
           </div>
           <div>
@@ -506,16 +712,13 @@ function FeatureList({ features, iconColor, dimmed, hoverBorder }) {
   );
 }
 
-function StepPanel({ active, enter, exit, center, startAlign, children }) {
-  const flexAlign = center
-    ? 'items-center justify-center text-center'
-    : startAlign
-      ? 'justify-start'
-      : 'justify-center';
+function StepPanel({ active, center, enter, exit, startAlign, children }) {
+  const flexAlign = center ? 'items-center justify-center text-center' : startAlign ? 'justify-start' : 'justify-center';
+
   return (
     <div
       className={`absolute inset-0 flex flex-col transition-all duration-700 ${flexAlign} ${
-        active ? `opacity-100 ${enter} pointer-events-auto z-10` : `opacity-0 ${exit} pointer-events-none z-0`
+        active ? `${enter} z-10 opacity-100 pointer-events-auto` : `${exit} z-0 opacity-0 pointer-events-none`
       }`}
       style={PANEL_TRANSITION_STYLE}
     >
@@ -524,30 +727,31 @@ function StepPanel({ active, enter, exit, center, startAlign, children }) {
   );
 }
 
-function ProfileButton({ onClick, icon: Icon, label, desc, hoverColor }) {
+function ProfileButton({ desc, hoverColor, icon: Icon, label, onClick }) {
   const colors = {
-    cyan: {
-      border: 'hover:border-cyan-500/40 hover:shadow-[0_0_30px_-10px_rgba(6,182,212,0.3)]',
-      ring:   'group-hover:border-cyan-500/50 group-hover:bg-cyan-500/10',
-      icon:   'group-hover:text-cyan-400',
-    },
     blue: {
       border: 'hover:border-blue-500/40 hover:shadow-[0_0_30px_-10px_rgba(59,130,246,0.3)]',
-      ring:   'group-hover:border-blue-500/50 group-hover:bg-blue-500/10',
-      icon:   'group-hover:text-blue-400',
+      icon: 'group-hover:text-blue-400',
+      ring: 'group-hover:border-blue-500/50 group-hover:bg-blue-500/10',
+    },
+    cyan: {
+      border: 'hover:border-cyan-500/40 hover:shadow-[0_0_30px_-10px_rgba(6,182,212,0.3)]',
+      icon: 'group-hover:text-cyan-400',
+      ring: 'group-hover:border-cyan-500/50 group-hover:bg-cyan-500/10',
     },
   }[hoverColor];
 
   return (
     <button
-      onClick={onClick}
       className={`group relative flex items-center rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5 text-left transition-all duration-300 hover:bg-white/[0.06] active:scale-[0.98] ${colors.border}`}
+      onClick={onClick}
+      type="button"
     >
       <div className={`mr-5 flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-white/[0.1] bg-white/[0.05] transition-all group-hover:scale-110 ${colors.ring}`}>
         <Icon size={24} className={`text-white/70 transition-colors ${colors.icon}`} />
       </div>
       <div>
-        <h3 className="mb-1 text-lg font-semibold text-white/90 group-hover:text-white transition-colors">{label}</h3>
+        <h3 className="mb-1 text-lg font-semibold text-white/90 transition-colors group-hover:text-white">{label}</h3>
         <p className="text-[13px] text-white/40">{desc}</p>
       </div>
     </button>
@@ -555,10 +759,21 @@ function ProfileButton({ onClick, icon: Icon, label, desc, hoverColor }) {
 }
 
 function CredentialField({
-  label, type, name, value, onChange, disabled, placeholder,
-  icon: Icon, isAluno, noLabel,
-  showToggle, showValue, onToggle,
-  hasError, inputRef, autoComplete,
+  autoComplete,
+  disabled,
+  hasError,
+  icon: Icon,
+  inputRef,
+  isAluno,
+  label,
+  name,
+  onChange,
+  onToggle,
+  placeholder,
+  showToggle,
+  showValue,
+  type,
+  value,
 }) {
   const ringClass = hasError
     ? 'border-red-500/50 ring-1 ring-red-500/40'
@@ -573,71 +788,39 @@ function CredentialField({
   const resolvedType = showToggle ? (showValue ? 'text' : 'password') : type;
 
   return (
-    <div className={`group ${hasError ? 'animate-shake' : ''}`}>
-      {!noLabel && label && (
-        <label className="text-[13px] font-medium text-white/60 pl-1 block mb-2">{label}</label>
-      )}
+    <div className="group">
+      <label className="mb-2 block pl-1 text-[13px] font-medium text-white/60" htmlFor={name}>
+        {label}
+      </label>
       <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
           <Icon size={18} className={`transition-colors ${iconClass}`} />
         </div>
         <input
-          ref={inputRef}
-          type={resolvedType}
-          name={name}
-          required
-          value={value}
-          onChange={onChange}
-          disabled={disabled}
-          placeholder={placeholder}
           autoComplete={autoComplete}
           className={`block w-full rounded-2xl border border-white/10 bg-white/5 p-4 pl-12 text-sm text-white outline-none transition-all placeholder:text-white/20 focus:bg-white/[0.07] focus:ring-1 disabled:opacity-50 ${ringClass} ${showToggle ? 'pr-12' : ''}`}
+          disabled={disabled}
+          id={name}
+          name={name}
+          onChange={onChange}
+          placeholder={placeholder}
+          ref={inputRef}
+          required
+          type={resolvedType}
+          value={value}
         />
-        {showToggle && (
+        {showToggle ? (
           <button
-            type="button"
-            tabIndex={-1}
-            onClick={onToggle}
             aria-label={showValue ? 'Esconder senha' : 'Mostrar senha'}
-            className="absolute inset-y-0 right-0 pr-4 flex items-center text-white/35 hover:text-white/70 transition-colors"
+            className="absolute inset-y-0 right-0 flex items-center pr-4 text-white/35 transition-colors hover:text-white/70"
+            onClick={onToggle}
+            tabIndex={-1}
+            type="button"
           >
             {showValue ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
-        )}
+        ) : null}
       </div>
     </div>
-  );
-}
-
-function SsoButton({ icon, label }) {
-  return (
-    <button
-      type="button"
-      className="flex w-full items-center justify-center gap-3 rounded-2xl border border-white/[0.09] bg-white/[0.04] px-4 py-3 text-sm font-medium text-white/75 transition-all hover:bg-white/[0.08] hover:border-white/[0.15] hover:text-white/90 active:scale-[0.98]"
-    >
-      <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center">
-        {icon}
-      </span>
-      {label}
-    </button>
-  );
-}
-
-function GoogleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05" />
-      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-    </svg>
-  );
-}
-
-function AppleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
-      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
-    </svg>
   );
 }

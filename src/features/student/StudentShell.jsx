@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useCallback, useEffect, useRef, useState, createContext, useContext } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { 
   Home, Activity, Calendar, Clock, BookOpen, RotateCcw, 
   CheckSquare, TrendingUp, Menu, X, Bell, Zap, Play, Search,
@@ -8,8 +8,10 @@ import {
 } from 'lucide-react';
 import { AccountHelpModal, AccountSettingsModal } from '../../components/ProfileActionPanels.jsx';
 import { RaioXSection, MentoriaView } from '../../components/StudentFeatures.jsx';
+import { useAuth } from '../../lib/useAuth.js';
 import { getStudentNotifications } from '../../services/student.js';
 import { useAppStore } from '../../store/index.js';
+import { DEFAULT_STUDENT_USER } from '../../store/studentShellSlice.js';
 
 const CalendarManagerView = lazy(() => import('./CalendarView.jsx'));
 const EditableScheduleView = lazy(() => import('./ScheduleView.jsx'));
@@ -77,23 +79,6 @@ const scheduleData = {
     { time: '11:00 - 12:30', seg: { subject: 'Estudo: Listas', type: 'study', color: 'bg-slate-800 text-white' }, ter: { subject: 'Redação', type: 'class', color: 'bg-pink-100 text-pink-700' }, qua: { subject: 'Filosofia', type: 'class', color: 'bg-yellow-100 text-yellow-700' }, qui: { subject: 'Literatura', type: 'class', color: 'bg-pink-100 text-pink-700' }, sex: { subject: 'Estudo: Simulado', type: 'study', color: 'bg-slate-800 text-white' } },
   ]
 };
-
-const DEFAULT_STUDENT_USER = {
-  name: 'Diogo Medrado',
-  turma: 'Extensivo',
-  xp: 1250,
-  level: 12,
-};
-
-const getHiddenStudentViews = (session) => session?.hiddenStudentViews ?? [];
-
-const sanitizeStudentView = (view, hiddenViews) =>
-  hiddenViews.includes(view) ? 'dashboard' : view;
-
-const buildStudentUser = (session) => ({
-  ...DEFAULT_STUDENT_USER,
-  ...(session?.name ? { name: session.name } : {}),
-});
 
 const getFirstName = (name = '') => {
   const [firstName] = name.trim().split(/\s+/);
@@ -194,26 +179,43 @@ const VIEW_TITLES = {
 export const STUDENT_VIEW_IDS = Object.freeze(Object.keys(VIEW_TITLES));
 
 // ============================================================================
-// 2. CONTEXTO GLOBAL (Substitui a injeção manual do Hexagonal para UI State)
+// 2. STORE DO SHELL (Zustand)
 // ============================================================================
 
-const AppContext = createContext();
-
-const AppProvider = ({ children, initialView = 'dashboard', session = null, onViewChange = null }) => {
-  const hiddenViews = getHiddenStudentViews(session);
-  const hiddenViewsKey = hiddenViews.join('|');
-  const [currentView, setCurrentView] = useState(() => sanitizeStudentView(initialView, hiddenViews));
-  const [user, setUser] = useState(() => buildStudentUser(session));
+const useApp = () => {
+  const currentView = useAppStore((state) => state.studentCurrentView);
+  const navigate = useAppStore((state) => state.navigateStudentShell);
   const sidebarOpen = useAppStore((state) => state.studentSidebarOpen);
   const setSidebarOpen = useAppStore((state) => state.setStudentSidebarOpen);
+  const user = useAppStore((state) => state.studentUser);
+  const addXp = useAppStore((state) => state.addStudentXp);
+  const hiddenViews = useAppStore((state) => state.studentHiddenViews);
+
+  return {
+    addXp,
+    currentView,
+    hiddenViews,
+    navigate,
+    setSidebarOpen,
+    sidebarOpen,
+    user,
+  };
+};
+
+const StudentShellBootstrap = ({ initialView = 'dashboard', onViewChange = null, session = null }) => {
+  const authUser = useAppStore((state) => state.user);
+  const currentView = useAppStore((state) => state.studentCurrentView);
+  const initializeStudentShell = useAppStore((state) => state.initializeStudentShell);
+  const hiddenViewsKey = (session?.hiddenStudentViews ?? []).join('|');
 
   useEffect(() => {
-    setCurrentView(sanitizeStudentView(initialView, hiddenViews));
-  }, [hiddenViewsKey, initialView]);
-
-  useEffect(() => {
-    setUser(buildStudentUser(session));
-  }, [session?.name]);
+    initializeStudentShell({
+      allowedViews: STUDENT_VIEW_IDS,
+      initialView,
+      session,
+      user: authUser,
+    });
+  }, [authUser, hiddenViewsKey, initialView, initializeStudentShell, session]);
 
   useEffect(() => {
     if (typeof onViewChange === 'function') {
@@ -221,30 +223,8 @@ const AppProvider = ({ children, initialView = 'dashboard', session = null, onVi
     }
   }, [currentView, onViewChange]);
 
-  const navigate = (view) => {
-    setCurrentView(sanitizeStudentView(view, hiddenViews));
-    setSidebarOpen(false); // Fecha sidebar no mobile ao navegar
-  };
-
-  const addXp = (amount) => {
-    setUser((prev) => {
-      const nextXp = prev.xp + amount;
-      return {
-        ...prev,
-        xp: nextXp,
-        level: Math.floor(nextXp / 100) + 1,
-      };
-    });
-  };
-
-  return (
-    <AppContext.Provider value={{ currentView, navigate, sidebarOpen, setSidebarOpen, user, addXp, hiddenViews }}>
-      {children}
-    </AppContext.Provider>
-  );
+  return null;
 };
-
-const useApp = () => useContext(AppContext);
 
 const IMMERSIVE_VIEWS = new Set([
   'aprovacao-fuvest',
@@ -846,6 +826,7 @@ const Navigation = () => {
 
 const Layout = ({ onLogout, externalViews = {} }) => {
   const { currentView, navigate, sidebarOpen, setSidebarOpen, user, addXp, hiddenViews } = useApp();
+  const { updateProfile, user: authUser } = useAuth();
   const {
     ReadingsView,
     RevisionsView,
@@ -1218,8 +1199,10 @@ const Layout = ({ onLogout, externalViews = {} }) => {
         <AccountSettingsModal
           open={showSettingsModal}
           onClose={() => setShowSettingsModal(false)}
+          onUpdateProfile={updateProfile}
           profile="student"
-          userName={getFirstName(user.name)}
+          userEmail={authUser?.email ?? ''}
+          userName={user.name}
         />
         <AccountHelpModal
           open={showHelpModal}
@@ -1269,8 +1252,13 @@ export default function StudentShell({
   onViewChange = null,
 }) {
   return (
-    <AppProvider initialView={initialView} session={session} onViewChange={onViewChange}>
+    <>
+      <StudentShellBootstrap
+        initialView={initialView}
+        onViewChange={onViewChange}
+        session={session}
+      />
       <Layout onLogout={onLogout} externalViews={externalViews} />
-    </AppProvider>
+    </>
   );
 }

@@ -1,13 +1,7 @@
-import { create } from 'zustand';
-import { createSessionSlice } from './sessionSlice.js';
-import { createUiSlice } from './uiSlice.js';
-
-export const useAppStore = create((...args) => ({
-  ...createSessionSlice(...args),
-  ...createUiSlice(...args),
-}));
+import { useAuthBootstrap } from '../lib/useAuth.js';
+export { useAppStore } from './appStore.js';
 
 export function StoreBootstrap() {
-  useAppStore((state) => state.profile);
+  useAuthBootstrap();
   return null;
 }

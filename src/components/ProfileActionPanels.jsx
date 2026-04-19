@@ -216,10 +216,20 @@ const ToggleField = ({ checked, description, label, onChange, theme }) => (
   </div>
 );
 
-export function AccountSettingsModal({ onClose, open, profile, userName }) {
+export function AccountSettingsModal({
+  onClose,
+  onUpdateProfile,
+  open,
+  profile,
+  userEmail = '',
+  userName = '',
+}) {
   const content = PROFILE_CONTENT[profile];
   const [settings, setSettings] = useState(content.defaultSettings);
+  const [profileName, setProfileName] = useState(userName);
   const [savedMessage, setSavedMessage] = useState('');
+  const [messageTone, setMessageTone] = useState('neutral');
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -227,8 +237,10 @@ export function AccountSettingsModal({ onClose, open, profile, userName }) {
     }
 
     setSettings(loadStoredSettings(content.settingsStorageKey, content.defaultSettings));
+    setProfileName(userName);
     setSavedMessage('');
-  }, [content.defaultSettings, content.settingsStorageKey, open]);
+    setMessageTone('neutral');
+  }, [content.defaultSettings, content.settingsStorageKey, open, userName]);
 
   const title = useMemo(() => `${userName || 'Voce'}, personalize seu ambiente`, [userName]);
 
@@ -239,12 +251,38 @@ export function AccountSettingsModal({ onClose, open, profile, userName }) {
     }));
   };
 
-  const handleSave = () => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(content.settingsStorageKey, JSON.stringify(settings));
+  const handleSave = async () => {
+    const normalizedProfileName = profileName.trim();
+
+    if (!normalizedProfileName) {
+      setMessageTone('error');
+      setSavedMessage('Informe o nome que deve aparecer no perfil.');
+      return;
     }
 
-    setSavedMessage('Preferencias salvas com sucesso.');
+    setIsSaving(true);
+
+    try {
+      if (typeof onUpdateProfile === 'function' && normalizedProfileName !== userName.trim()) {
+        await onUpdateProfile({ fullName: normalizedProfileName });
+      }
+
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(content.settingsStorageKey, JSON.stringify(settings));
+      }
+
+      setMessageTone('success');
+      setSavedMessage(
+        normalizedProfileName !== userName.trim()
+          ? 'Perfil e preferencias salvos com sucesso.'
+          : 'Preferencias salvas com sucesso.',
+      );
+    } catch (error) {
+      setMessageTone('error');
+      setSavedMessage(error.message || 'Nao foi possivel salvar as alteracoes.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -258,7 +296,9 @@ export function AccountSettingsModal({ onClose, open, profile, userName }) {
       icon={Settings2}
       footer={
         <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-          <p className="min-h-5 text-sm font-semibold text-slate-500">{savedMessage}</p>
+          <p className={`min-h-5 text-sm font-semibold ${messageTone === 'error' ? 'text-red-500' : messageTone === 'success' ? 'text-emerald-600' : 'text-slate-500'}`}>
+            {savedMessage}
+          </p>
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
             <button
               type="button"
@@ -270,15 +310,44 @@ export function AccountSettingsModal({ onClose, open, profile, userName }) {
             <button
               type="button"
               onClick={handleSave}
-              className={`rounded-2xl px-4 py-3 text-sm font-bold text-white shadow-lg transition-colors focus:outline-none focus:ring-2 ${content.primaryButton}`}
+              disabled={isSaving}
+              className={`rounded-2xl px-4 py-3 text-sm font-bold text-white shadow-lg transition-colors focus:outline-none focus:ring-2 disabled:cursor-wait disabled:opacity-70 ${content.primaryButton}`}
             >
-              Salvar preferencias
+              {isSaving ? 'Salvando...' : 'Salvar preferencias'}
             </button>
           </div>
         </div>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-6">
+        <div className="grid gap-4 rounded-[1.4rem] border border-slate-200 bg-slate-50/80 p-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500" htmlFor={`${profile}-profile-name`}>
+              Nome exibido
+            </label>
+            <input
+              id={`${profile}-profile-name`}
+              type="text"
+              value={profileName}
+              onChange={(event) => setProfileName(event.target.value)}
+              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-colors focus:border-slate-400"
+              placeholder="Como seu nome deve aparecer"
+            />
+          </div>
+          <div>
+            <label className="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-slate-500" htmlFor={`${profile}-profile-email`}>
+              E-mail
+            </label>
+            <input
+              id={`${profile}-profile-email`}
+              type="email"
+              value={userEmail}
+              readOnly
+              className="w-full rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-medium text-slate-500 outline-none"
+            />
+          </div>
+        </div>
+
         {content.settings.map((field) => (
           <ToggleField
             key={field.key}
